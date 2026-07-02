@@ -118,7 +118,7 @@ class CardViewModel(
         }
     }
     
-    fun submitCard(userId: String, role: String) {
+    fun submitCard(userId: String, role: String, status: String = "active") {
         val customerId = selectedCustomerId
         if (customerId == null) {
             uiState = CardFormUiState.Error("Please select or create a customer first.")
@@ -171,7 +171,8 @@ class CardViewModel(
             business_hours = businessHours.trim().ifBlank { null },
             content_display_mode = contentDisplayMode,
             enable_booking = enableBooking,
-            booking_whatsapp = bookingWhatsapp.trim().ifBlank { null }
+            booking_whatsapp = bookingWhatsapp.trim().ifBlank { null },
+            status = status
         )
         
         uiState = CardFormUiState.Loading

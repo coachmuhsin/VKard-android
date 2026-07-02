@@ -28,12 +28,18 @@ jobs:
           java-version: '17'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          cache-read-only: false
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Make Gradle Wrapper Executable
         run: chmod +x gradlew
+
+      - name: Detect App Version
+        run: |
+          versionCode=$(grep "versionCode =" app/build.gradle.kts | sed 's/[^0-9]//g')
+          versionName=$(grep "versionName =" app/build.gradle.kts | cut -d '"' -f 2)
+          echo "VERSION_CODE=$versionCode" >> $GITHUB_ENV
+          echo "VERSION_NAME=$versionName" >> $GITHUB_ENV
+        shell: bash
 
       - name: Generate Properties
         run: |
@@ -53,6 +59,7 @@ jobs:
 
       - name: Build App
         run: |
+          ./gradlew clean --build-cache --parallel --no-daemon
           ./gradlew assembleDebug --build-cache --parallel --no-daemon
           if [ "${{ env.HAS_SIGNING }}" = "true" ]; then
             ./gradlew assembleRelease bundleRelease --build-cache --parallel --no-daemon
@@ -75,10 +82,9 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: VKARD PRO Build
+          tag_name: v${{ github.run_number }}
+          name: VKARD PRO Build ${{ github.run_number }}
           files: build_outputs/*
-          fail_on_unsupported_status: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -114,8 +120,10 @@ jobs:
           DURATION=$((END_TIME - START_TIME))
           MIN=$((DURATION / 60))
           SEC=$((DURATION % 60))
-          echo "Build Success"
-          echo "Release URL: https://github.com/${{ github.repository }}/releases/tag/v1.0.${{ github.run_number }}"
-          echo "APK URL: https://github.com/${{ github.repository }}/releases/download/v1.0.${{ github.run_number }}/VKARD-PRO.apk"
+          echo "Build Successful"
+          echo "Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ github.run_number }}"
+          echo "APK URL: https://github.com/${{ github.repository }}/releases/download/v${{ github.run_number }}/VKARD-PRO.apk"
+          echo "AAB URL: https://github.com/${{ github.repository }}/releases/download/v${{ github.run_number }}/VKARD-PRO.aab"
           echo "Workflow Duration: ${MIN}m ${SEC}s"
+          echo "Permanent Download URL: https://github.com/${{ github.repository }}/releases/latest/download/VKARD-PRO.apk"
         shell: bash

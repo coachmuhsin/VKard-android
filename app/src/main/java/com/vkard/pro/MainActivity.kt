@@ -146,6 +146,9 @@ class MainActivity : ComponentActivity() {
                             onManageCustomers = {
                                 navController.navigate(Screen.CustomerList.route)
                             },
+                            onShareCard = { slug ->
+                                navController.navigate(Screen.QrShare.createRoute(slug))
+                            },
                             onLogout = {
                                 coroutineScope.launch {
                                     authRepository.logout()

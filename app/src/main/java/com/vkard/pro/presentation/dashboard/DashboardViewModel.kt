@@ -30,22 +30,27 @@ sealed interface DashboardUiState {
         val franchiseCount: Int,
         val agentCount: Int,
         val cardStats: CardStats,
+        val cards: List<DigitalCardWithSub>,
         val ledger: List<RevenueLedger>
     ) : DashboardUiState
     
     data class FranchiseData(
+        val name: String,
         val code: String,
         val credits: Int,
         val cardStats: CardStats,
+        val cards: List<DigitalCardWithSub>,
         val agentNetwork: List<AgentUiModel>,
         val ledger: List<RevenueLedger>
     ) : DashboardUiState
     
     data class AgentData(
+        val name: String,
         val code: String,
         val credits: Int,
         val affiliation: String,
         val cardStats: CardStats,
+        val cards: List<DigitalCardWithSub>,
         val ledger: List<RevenueLedger>
     ) : DashboardUiState
     
@@ -100,6 +105,7 @@ class DashboardViewModel(
                             franchiseCount = franchises.size,
                             agentCount = agents.size,
                             cardStats = cardStats,
+                            cards = cards,
                             ledger = ledger
                         )
                     }
@@ -115,6 +121,9 @@ class DashboardViewModel(
                         
                         val code = franchiseProfile?.get("franchise_code")?.jsonPrimitive?.content ?: "N/A"
                         val credits = franchiseProfile?.get("credits_balance")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                        val name = franchiseProfile?.get("name")?.jsonPrimitive?.content 
+                            ?: sessionManager.getEmail()?.substringBefore("@")?.replaceFirstChar { it.uppercase() } 
+                            ?: "Franchise"
                         
                         // Fetch child agents
                         val agentsList = supabase.postgrest["agents"]
@@ -136,9 +145,11 @@ class DashboardViewModel(
                         }
                         
                         uiState = DashboardUiState.FranchiseData(
+                            name = name,
                             code = code,
                             credits = credits,
                             cardStats = cardStats,
+                            cards = cards,
                             agentNetwork = agentNetwork,
                             ledger = ledger
                         )
@@ -155,6 +166,9 @@ class DashboardViewModel(
                         
                         val code = agentProfile?.get("agent_code")?.jsonPrimitive?.content ?: "N/A"
                         val credits = agentProfile?.get("credits_balance")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                        val name = agentProfile?.get("name")?.jsonPrimitive?.content 
+                            ?: sessionManager.getEmail()?.substringBefore("@")?.replaceFirstChar { it.uppercase() } 
+                            ?: "Agent"
                         
                         val franchiseId = agentProfile?.get("franchise_id")?.jsonPrimitive?.content
                         var affiliation = "Company Direct"
@@ -170,10 +184,12 @@ class DashboardViewModel(
                         }
                         
                         uiState = DashboardUiState.AgentData(
+                            name = name,
                             code = code,
                             credits = credits,
                             affiliation = affiliation,
                             cardStats = cardStats,
+                            cards = cards,
                             ledger = ledger
                         )
                     }

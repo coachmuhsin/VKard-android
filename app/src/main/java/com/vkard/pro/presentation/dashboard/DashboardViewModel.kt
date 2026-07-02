@@ -12,10 +12,15 @@ import com.vkard.pro.domain.model.RevenueLedger
 import com.vkard.pro.domain.repository.AuthRepository
 import com.vkard.pro.domain.repository.CardRepository
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.postgrest.query.Columns
+import io.github.jan.supabase.gotrue.auth
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import io.github.jan.supabase.gotrue.providers.builtin.Email
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 data class CardStats(
     val total: Int = 0,
@@ -219,21 +224,220 @@ class DashboardViewModel(
         }
     }
 
-    fun updateAgent(agentId: String, newName: String, newCredits: Int, newStatus: String) {
+    fun updateAgent(
+        agentId: String,
+        newName: String,
+        newCredits: Int,
+        newStatus: String,
+        onComplete: (Result<Unit>) -> Unit
+    ) {
         viewModelScope.launch {
             try {
-                supabase.postgrest["agents"].update({
-                    set("name", newName)
-                    set("credits_balance", newCredits)
-                    set("status", newStatus)
-                }) {
-                    filter {
-                        eq("id", agentId)
+                val franchiseId = sessionManager.getUserId() ?: throw Exception("Unauthorized")
+                
+                // Fetch latest sender (franchise) credits
+                val franchiseResponse = supabase.postgrest["franchises"]
+                    .select { filter { eq("id", franchiseId) } }
+                    .decodeList<JsonObject>()
+                val latestFranchiseCredits = franchiseResponse.firstOrNull()?.get("credits_balance")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                
+                // Fetch latest agent credits
+                val agentResponse = supabase.postgrest["agents"]
+                    .select { filter { eq("id", agentId) } }
+                    .decodeList<JsonObject>()
+                val latestAgentCredits = agentResponse.firstOrNull()?.get("credits_balance")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                
+                if (newCredits > latestAgentCredits) {
+                    // Credit Transfer
+                    val transferAmount = newCredits - latestAgentCredits
+                    if (latestFranchiseCredits < transferAmount) {
+                        throw Exception("Insufficient Wallet Credits")
+                    }
+                    
+                    // Deduct franchise credits
+                    supabase.postgrest["franchises"].update({
+                        set("credits_balance", latestFranchiseCredits - transferAmount)
+                    }) {
+                        filter { eq("id", franchiseId) }
+                    }
+                    
+                    try {
+                        // Add agent credits
+                        supabase.postgrest["agents"].update({
+                            set("credits_balance", newCredits)
+                            set("name", newName)
+                            set("status", newStatus)
+                        }) {
+                            filter { eq("id", agentId) }
+                        }
+                        
+                        // Insert ledger entries
+                        val senderLedger = buildJsonObject {
+                            put("user_id", franchiseId)
+                            put("transaction_type", "Credit Transfer")
+                            put("credits_used", -transferAmount)
+                            put("remarks", "Transferred to agent: $newName")
+                        }
+                        val receiverLedger = buildJsonObject {
+                            put("user_id", agentId)
+                            put("transaction_type", "Credit Received")
+                            put("credits_used", transferAmount)
+                            put("remarks", "Received from franchise")
+                        }
+                        supabase.postgrest["revenue_ledger"].insert(listOf(senderLedger, receiverLedger))
+                        
+                    } catch (e: Exception) {
+                        // Rollback step 1: refund franchise
+                        supabase.postgrest["franchises"].update({
+                            set("credits_balance", latestFranchiseCredits)
+                        }) {
+                            filter { eq("id", franchiseId) }
+                        }
+                        throw e
+                    }
+                } else if (newCredits < latestAgentCredits) {
+                    // Reclaim Credits
+                    val transferAmount = latestAgentCredits - newCredits
+                    if (latestAgentCredits < transferAmount) {
+                        throw Exception("Agent has insufficient credits to reclaim")
+                    }
+                    
+                    // Deduct agent credits
+                    supabase.postgrest["agents"].update({
+                        set("credits_balance", newCredits)
+                        set("name", newName)
+                        set("status", newStatus)
+                    }) {
+                        filter { eq("id", agentId) }
+                    }
+                    
+                    try {
+                        // Add franchise credits
+                        supabase.postgrest["franchises"].update({
+                            set("credits_balance", latestFranchiseCredits + transferAmount)
+                        }) {
+                            filter { eq("id", franchiseId) }
+                        }
+                        
+                        // Insert ledger entries
+                        val senderLedger = buildJsonObject {
+                            put("user_id", agentId)
+                            put("transaction_type", "Credit Returned")
+                            put("credits_used", -transferAmount)
+                            put("remarks", "Returned to franchise")
+                        }
+                        val receiverLedger = buildJsonObject {
+                            put("user_id", franchiseId)
+                            put("transaction_type", "Credit Reclaimed")
+                            put("credits_used", transferAmount)
+                            put("remarks", "Reclaimed from agent: $newName")
+                        }
+                        supabase.postgrest["revenue_ledger"].insert(listOf(senderLedger, receiverLedger))
+                        
+                    } catch (e: Exception) {
+                        // Rollback step 1: refund agent
+                        supabase.postgrest["agents"].update({
+                            set("credits_balance", latestAgentCredits)
+                        }) {
+                            filter { eq("id", agentId) }
+                        }
+                        throw e
+                    }
+                } else {
+                    // Update metadata only
+                    supabase.postgrest["agents"].update({
+                        set("name", newName)
+                        set("status", newStatus)
+                    }) {
+                        filter { eq("id", agentId) }
                     }
                 }
+                
                 loadDashboard()
+                onComplete(Result.success(Unit))
             } catch (e: Exception) {
-                // Fail silently or log
+                onComplete(Result.failure(e))
+            }
+        }
+    }
+
+    fun createAgent(
+        agentName: String,
+        agentEmail: String,
+        agentPassword: String,
+        agentWhatsapp: String,
+        initialCredits: Int,
+        onComplete: (Result<Unit>) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val franchiseId = sessionManager.getUserId() ?: throw Exception("Unauthorized")
+                
+                // Fetch latest franchise credits
+                val franchiseResponse = supabase.postgrest["franchises"]
+                    .select { filter { eq("id", franchiseId) } }
+                    .decodeList<JsonObject>()
+                val latestFranchiseCredits = franchiseResponse.firstOrNull()?.get("credits_balance")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                
+                if (initialCredits > latestFranchiseCredits) {
+                    throw Exception("Insufficient Wallet Credits")
+                }
+                
+                // 1. Sign up the agent user auth
+                val authResult = supabase.auth.signUpWith(Email) {
+                    email = agentEmail
+                    password = agentPassword
+                    data = buildJsonObject {
+                        put("role", "agent")
+                        put("name", agentName)
+                        put("credits_balance", 0)
+                        put("franchise_id", franchiseId)
+                        put("created_by", franchiseId)
+                        put("whatsapp_number", agentWhatsapp)
+                    }
+                }
+                
+                val newAgentId = authResult?.id ?: throw Exception("Failed to create agent user")
+                
+                // 2. Fetch new agent from agents table to verify insertion trigger completed
+                var retries = 5
+                var newAgentVerified = false
+                while (retries > 0 && !newAgentVerified) {
+                    val checkAgent = supabase.postgrest["agents"]
+                        .select { filter { eq("id", newAgentId) } }
+                        .decodeList<JsonObject>()
+                    if (checkAgent.isNotEmpty()) {
+                        newAgentVerified = true
+                    } else {
+                        retries--
+                        kotlinx.coroutines.delay(1000)
+                    }
+                }
+                
+                if (!newAgentVerified) {
+                    throw Exception("Database trigger timed out. Agent profile not verified.")
+                }
+                
+                // 3. If initial credits > 0, perform credit transfer using transfer_credits RPC
+                if (initialCredits > 0) {
+                    supabase.postgrest.rpc(
+                        function = "transfer_credits",
+                        parameters = buildJsonObject {
+                            put("p_from_type", "franchise")
+                            put("p_from_id", franchiseId)
+                            put("p_to_type", "agent")
+                            put("p_to_id", newAgentId)
+                            put("p_credits", initialCredits)
+                            put("p_remarks", "Initial credit allocation upon agent creation: $initialCredits credits.")
+                            put("p_idempotency_key", "create-agent-credits-$newAgentId")
+                        }
+                    )
+                }
+                
+                loadDashboard()
+                onComplete(Result.success(Unit))
+            } catch (e: Exception) {
+                onComplete(Result.failure(e))
             }
         }
     }
@@ -276,5 +480,18 @@ class DashboardViewModel(
             }
         }
         return CardStats(total, active, expired, draft)
+    }
+
+    fun resetPassword(newPassword: String, onResult: (Result<Unit>) -> Unit) {
+        viewModelScope.launch {
+            try {
+                supabase.auth.modifyUser {
+                    password = newPassword
+                }
+                onResult(Result.success(Unit))
+            } catch (e: Exception) {
+                onResult(Result.failure(e))
+            }
+        }
     }
 }

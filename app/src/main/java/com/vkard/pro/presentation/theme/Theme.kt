@@ -27,6 +27,7 @@ fun VKardProTheme(
 ) {
     MaterialTheme(
         colorScheme = VKardProColorScheme,
+        typography = PoppinsTypography,
         content = content
     )
 }

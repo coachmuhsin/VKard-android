@@ -4,7 +4,6 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,7 +13,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -26,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -39,9 +38,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.vkard.pro.domain.model.DigitalCardWithSub
 import com.vkard.pro.domain.model.RevenueLedger
+import com.vkard.pro.presentation.theme.PoppinsFontFamily
 
 // Brand Colors
 private val BrandPrimary = Color(0xFF077DF7)
@@ -56,6 +55,7 @@ private val BrandError = Color(0xFFFF3B30)
 
 // Helper Navigation Item Data
 data class TabItem(val id: String, val label: String, val icon: ImageVector)
+data class QuickActionItem(val label: String, val icon: ImageVector, val onClick: () -> Unit)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -106,12 +106,12 @@ fun DashboardScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = BrandError, modifier = Modifier.size(48.dp))
-                            Text(text = uiState.message, color = BrandError, fontSize = 16.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+                            Text(text = uiState.message, color = BrandError, fontSize = 14.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center, fontFamily = PoppinsFontFamily)
                             Button(
                                 onClick = { viewModel.loadDashboard() },
                                 colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
                             ) {
-                                Text("Retry", color = Color.White)
+                                Text("Retry", color = Color.White, fontFamily = PoppinsFontFamily)
                             }
                         }
                     }
@@ -126,7 +126,8 @@ fun DashboardScreen(
                         onManageCustomers = onManageCustomers,
                         onLogout = onLogout,
                         onRefresh = { viewModel.loadDashboard() },
-                        onDeleteCard = { viewModel.deleteCard(it) }
+                        onDeleteCard = { viewModel.deleteCard(it) },
+                        viewModel = viewModel
                     )
                 }
                 is DashboardUiState.FranchiseData -> {
@@ -140,25 +141,28 @@ fun DashboardScreen(
                         onLogout = onLogout,
                         onRefresh = { viewModel.loadDashboard() },
                         onDeleteCard = { viewModel.deleteCard(it) },
-                        onUpdateAgent = { agentId, newName, newCredits, newStatus ->
-                            viewModel.updateAgent(agentId, newName, newCredits, newStatus)
+                        onUpdateAgent = { agentId, newName, newCredits, newStatus, onComplete ->
+                            viewModel.updateAgent(agentId, newName, newCredits, newStatus, onComplete)
                         },
                         onUpdateProfile = { newName ->
                             val userId = viewModel.sessionManager.getUserId() ?: ""
                             viewModel.updateFranchiseProfile(userId, newName)
-                        }
+                        },
+                        viewModel = viewModel
                     )
                 }
                 is DashboardUiState.AgentData -> {
                     AgentView(
                         data = uiState,
                         selectedTab = selectedTab,
+                        onTabSelected = { selectedTab = it },
                         onShareCard = onShareCard,
                         onCreateCard = onCreateCard,
                         onManageCustomers = onManageCustomers,
                         onLogout = onLogout,
                         onRefresh = { viewModel.loadDashboard() },
-                        onDeleteCard = { viewModel.deleteCard(it) }
+                        onDeleteCard = { viewModel.deleteCard(it) },
+                        viewModel = viewModel
                     )
                 }
             }
@@ -180,10 +184,12 @@ fun SuperAdminView(
     onManageCustomers: () -> Unit,
     onLogout: () -> Unit,
     onRefresh: () -> Unit,
-    onDeleteCard: (String) -> Unit
+    onDeleteCard: (String) -> Unit,
+    viewModel: DashboardViewModel
 ) {
     when (selectedTab) {
         "home" -> {
+            val userId = viewModel.sessionManager.getUserId() ?: ""
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -192,56 +198,30 @@ fun SuperAdminView(
                 contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
             ) {
                 item {
-                    DashboardHeader(name = "Super Admin", roleLabel = "Super Admin", onRefresh = onRefresh)
-                }
-
-                // Super Admin Metrics
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        DashboardStatCard(
-                            title = "Franchises",
-                            value = data.franchiseCount.toString(),
-                            subtitle = "Active outlets",
-                            icon = Icons.Default.Business,
-                            color = BrandPrimary,
-                            modifier = Modifier.weight(1f)
-                        )
-                        DashboardStatCard(
-                            title = "Sales Agents",
-                            value = data.agentCount.toString(),
-                            subtitle = "Registered agents",
-                            icon = Icons.Default.Groups,
-                            color = BrandSecondary,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
+                    DashboardHeaderBlock(
+                        name = "Super Admin",
+                        roleLabel = "Super Admin",
+                        credits = "Unlimited",
+                        agentCount = data.agentCount,
+                        onRefresh = onRefresh
+                    )
                 }
 
                 item {
                     CardStatsBlock(stats = data.cardStats)
                 }
 
-                // Quick Actions
+                // Latest Visiting Cards
                 item {
-                    QuickActionsSection(
-                        actions = listOf(
-                            QuickActionItem("Create Card", Icons.Default.AddCard) { onCreateCard(null) },
-                            QuickActionItem("Card List", Icons.Default.CreditCard) { onTabSelected("cards") },
-                            QuickActionItem("Clients", Icons.Default.People) { onTabSelected("customers") },
-                            QuickActionItem("Agents Network", Icons.Default.Groups) { onTabSelected("agents") }
-                        )
+                    val latestCards = data.cards.filter { it.created_by == userId }
+                        .sortedByDescending { it.created_at ?: "" }
+                        .take(3)
+                    LatestVisitingCardsSection(
+                        latestCards = latestCards,
+                        onCreateCard = onCreateCard,
+                        onViewAll = { onTabSelected("cards") },
+                        onShareCard = onShareCard
                     )
-                }
-
-                item {
-                    Text("System Wallet Ledger", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = BrandText)
-                }
-
-                items(data.ledger.take(5)) { ledgerItem ->
-                    LedgerCardItem(ledgerItem)
                 }
             }
         }
@@ -252,13 +232,25 @@ fun SuperAdminView(
             CustomersManagementTab(onManageCustomers = onManageCustomers)
         }
         "agents" -> {
-            AgentsListTab(agents = emptyList(), allCards = data.cards, isSuperAdmin = true, onUpdateAgent = { _, _, _, _ -> }, onRefresh = onRefresh)
+            AgentsListTab(agents = emptyList(), allCards = data.cards, isSuperAdmin = true, onUpdateAgent = { _, _, _, _, _ -> }, onCreateAgent = null, onRefresh = onRefresh)
         }
         "support" -> {
             SupportTab(userName = "Super Admin", userRole = "Super Admin", userCode = "N/A", userEmail = "admin@vkard.pro")
         }
         "profile" -> {
-            ProfileOptionsTab(name = "Super Admin", email = "admin@vkard.pro", role = "Super Admin", onLogout = onLogout, onEditProfile = {})
+            ProfileOptionsTab(
+                name = "Super Admin",
+                email = "admin@vkard.pro",
+                role = "Super Admin",
+                code = "N/A",
+                credits = "Unlimited",
+                activeCards = data.cardStats.active,
+                createdDate = "Member since 2024",
+                ledger = data.ledger,
+                onLogout = onLogout,
+                onEditProfile = {},
+                viewModel = viewModel
+            )
         }
     }
 }
@@ -274,10 +266,12 @@ fun FranchiseView(
     onLogout: () -> Unit,
     onRefresh: () -> Unit,
     onDeleteCard: (String) -> Unit,
-    onUpdateAgent: (agentId: String, newName: String, newCredits: Int, newStatus: String) -> Unit,
-    onUpdateProfile: (String) -> Unit
+    onUpdateAgent: (agentId: String, newName: String, newCredits: Int, newStatus: String, onComplete: (Result<Unit>) -> Unit) -> Unit,
+    onUpdateProfile: (String) -> Unit,
+    viewModel: DashboardViewModel
 ) {
     var showEditProfileDialog by remember { mutableStateOf(false) }
+    val userId = viewModel.sessionManager.getUserId() ?: ""
 
     when (selectedTab) {
         "home" -> {
@@ -289,57 +283,30 @@ fun FranchiseView(
                 contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
             ) {
                 item {
-                    DashboardHeader(name = data.name, roleLabel = "Franchise", onRefresh = onRefresh)
-                }
-
-                // Stats Card Rows
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        DashboardStatCard(
-                            title = "Wallet Balance",
-                            value = "${data.credits}",
-                            subtitle = "Kard Credits",
-                            icon = Icons.Default.AccountBalanceWallet,
-                            color = BrandPrimary,
-                            modifier = Modifier.weight(1.1f)
-                        )
-                        DashboardStatCard(
-                            title = "Active Agents",
-                            value = "${data.agentNetwork.size}",
-                            subtitle = "Sub network",
-                            icon = Icons.Default.Groups,
-                            color = BrandSecondary,
-                            modifier = Modifier.weight(0.9f)
-                        )
-                    }
+                    DashboardHeaderBlock(
+                        name = data.name,
+                        roleLabel = "Franchise",
+                        credits = data.credits.toString(),
+                        agentCount = data.agentNetwork.size,
+                        onRefresh = onRefresh
+                    )
                 }
 
                 item {
                     CardStatsBlock(stats = data.cardStats)
                 }
 
-                // Quick Actions
+                // Latest Visiting Cards
                 item {
-                    QuickActionsSection(
-                        actions = listOf(
-                            QuickActionItem("Create Card", Icons.Default.AddCard) { onCreateCard(null) },
-                            QuickActionItem("Card List", Icons.Default.CreditCard) { onTabSelected("cards") },
-                            QuickActionItem("Agents Network", Icons.Default.Groups) { onTabSelected("agents") },
-                            QuickActionItem("Search Client", Icons.Default.Search) { onManageCustomers() }
-                        )
+                    val latestCards = data.cards.filter { it.created_by == userId }
+                        .sortedByDescending { it.created_at ?: "" }
+                        .take(3)
+                    LatestVisitingCardsSection(
+                        latestCards = latestCards,
+                        onCreateCard = onCreateCard,
+                        onViewAll = { onTabSelected("cards") },
+                        onShareCard = onShareCard
                     )
-                }
-
-                // Recent Activities
-                item {
-                    Text("Recent Transactions Ledger", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = BrandText)
-                }
-
-                items(data.ledger.take(5)) { ledgerItem ->
-                    LedgerCardItem(ledgerItem)
                 }
             }
         }
@@ -347,7 +314,24 @@ fun FranchiseView(
             VisitingCardsListTab(cards = data.cards, onShareCard = onShareCard, onCreateCard = onCreateCard, onDeleteCard = onDeleteCard, onRefresh = onRefresh)
         }
         "agents" -> {
-            AgentsListTab(agents = data.agentNetwork, allCards = data.cards, isSuperAdmin = false, onUpdateAgent = onUpdateAgent, onRefresh = onRefresh)
+            var showCreateAgentDialog by remember { mutableStateOf(false) }
+            AgentsListTab(
+                agents = data.agentNetwork,
+                allCards = data.cards,
+                isSuperAdmin = false,
+                onUpdateAgent = onUpdateAgent,
+                onCreateAgent = { showCreateAgentDialog = true },
+                onRefresh = onRefresh
+            )
+            if (showCreateAgentDialog) {
+                CreateAgentDialog(
+                    franchiseCredits = data.credits,
+                    onDismiss = { showCreateAgentDialog = false },
+                    onCreate = { name, email, pass, whatsapp, credits, onComplete ->
+                        viewModel.createAgent(name, email, pass, whatsapp, credits, onComplete)
+                    }
+                )
+            }
         }
         "support" -> {
             SupportTab(userName = data.name, userRole = "Franchise Partner", userCode = data.code, userEmail = "Code: " + data.code)
@@ -357,8 +341,14 @@ fun FranchiseView(
                 name = data.name,
                 email = "Franchise Code: " + data.code,
                 role = "Franchise Partner",
+                code = data.code,
+                credits = data.credits.toString(),
+                activeCards = data.cardStats.active,
+                createdDate = "Member since 2024",
+                ledger = data.ledger,
                 onLogout = onLogout,
-                onEditProfile = { showEditProfileDialog = true }
+                onEditProfile = { showEditProfileDialog = true },
+                viewModel = viewModel
             )
         }
     }
@@ -379,13 +369,16 @@ fun FranchiseView(
 fun AgentView(
     data: DashboardUiState.AgentData,
     selectedTab: String,
+    onTabSelected: (String) -> Unit,
     onShareCard: (String) -> Unit,
     onCreateCard: (String?) -> Unit,
     onManageCustomers: () -> Unit,
     onLogout: () -> Unit,
     onRefresh: () -> Unit,
-    onDeleteCard: (String) -> Unit
+    onDeleteCard: (String) -> Unit,
+    viewModel: DashboardViewModel
 ) {
+    val userId = viewModel.sessionManager.getUserId() ?: ""
     when (selectedTab) {
         "home" -> {
             LazyColumn(
@@ -396,54 +389,30 @@ fun AgentView(
                 contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
             ) {
                 item {
-                    DashboardHeader(name = data.name, roleLabel = "Agent", onRefresh = onRefresh)
-                }
-
-                // Stats Cards
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        DashboardStatCard(
-                            title = "Wallet Credits",
-                            value = "${data.credits}",
-                            subtitle = "Kard balance",
-                            icon = Icons.Default.AccountBalanceWallet,
-                            color = BrandPrimary,
-                            modifier = Modifier.weight(1.1f)
-                        )
-                        DashboardStatCard(
-                            title = "Affiliation",
-                            value = data.affiliation.take(12),
-                            subtitle = "Franchise group",
-                            icon = Icons.Default.Business,
-                            color = BrandSecondary,
-                            modifier = Modifier.weight(0.9f)
-                        )
-                    }
+                    DashboardHeaderBlock(
+                        name = data.name,
+                        roleLabel = "Agent",
+                        credits = data.credits.toString(),
+                        agentCount = null,
+                        onRefresh = onRefresh
+                    )
                 }
 
                 item {
                     CardStatsBlock(stats = data.cardStats)
                 }
 
-                // Quick Actions
+                // Latest Visiting Cards
                 item {
-                    QuickActionsSection(
-                        actions = listOf(
-                            QuickActionItem("Create Card", Icons.Default.AddCard) { onCreateCard(null) },
-                            QuickActionItem("Search Client", Icons.Default.Search) { onManageCustomers() }
-                        )
+                    val latestCards = data.cards.filter { it.created_by == userId }
+                        .sortedByDescending { it.created_at ?: "" }
+                        .take(3)
+                    LatestVisitingCardsSection(
+                        latestCards = latestCards,
+                        onCreateCard = onCreateCard,
+                        onViewAll = { onTabSelected("cards") },
+                        onShareCard = onShareCard
                     )
-                }
-
-                item {
-                    Text("Personal Account Ledger", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = BrandText)
-                }
-
-                items(data.ledger.take(5)) { ledgerItem ->
-                    LedgerCardItem(ledgerItem)
                 }
             }
         }
@@ -454,7 +423,19 @@ fun AgentView(
             SupportTab(userName = data.name, userRole = "Sales Agent", userCode = data.code, userEmail = "Agent ID: " + data.code)
         }
         "profile" -> {
-            ProfileOptionsTab(name = data.name, email = "Agent ID: " + data.code, role = "Sales Agent", onLogout = onLogout, onEditProfile = {})
+            ProfileOptionsTab(
+                name = data.name,
+                email = "Agent ID: " + data.code,
+                role = "Sales Agent",
+                code = data.code,
+                credits = data.credits.toString(),
+                activeCards = data.cardStats.active,
+                createdDate = "Member since 2024",
+                ledger = data.ledger,
+                onLogout = onLogout,
+                onEditProfile = {},
+                viewModel = viewModel
+            )
         }
     }
 }
@@ -464,9 +445,11 @@ fun AgentView(
 // ----------------------------------------------------
 
 @Composable
-fun DashboardHeader(
+fun DashboardHeaderBlock(
     name: String,
     roleLabel: String,
+    credits: String,
+    agentCount: Int?,
     onRefresh: () -> Unit
 ) {
     val calendarHour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
@@ -476,77 +459,142 @@ fun DashboardHeader(
         else -> "Good Evening"
     }
 
-    Row(
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, BrandPrimary.copy(alpha = 0.15f)),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .shadow(2.dp, RoundedCornerShape(24.dp), ambientColor = BrandPrimary.copy(alpha = 0.05f), spotColor = BrandPrimary.copy(alpha = 0.05f))
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        Column(
+            modifier = Modifier
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(BrandPrimary.copy(alpha = 0.06f), Color.White)
+                    )
+                )
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .background(BrandPrimary, RoundedCornerShape(24.dp))
-                    .border(1.dp, BrandBorder, RoundedCornerShape(24.dp)),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = name.take(1).uppercase(),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-            }
-
-            Column {
-                Text(
-                    text = "$greeting,",
-                    fontSize = 13.sp,
-                    color = Color(0xFF64748B),
-                    fontWeight = FontWeight.Medium
-                )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Text(
-                        text = name,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = BrandText
-                    )
                     Box(
                         modifier = Modifier
-                            .background(BrandPrimary.copy(alpha = 0.08f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                            .size(48.dp)
+                            .background(BrandPrimary, RoundedCornerShape(24.dp)),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = roleLabel,
-                            fontSize = 10.sp,
+                            text = name.take(1).uppercase(),
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
-                            color = BrandPrimary
+                            color = Color.White,
+                            fontFamily = PoppinsFontFamily
                         )
+                    }
+
+                    Column {
+                        Text(
+                            text = greeting,
+                            fontSize = 12.sp,
+                            color = Color(0xFF64748B),
+                            fontWeight = FontWeight.Medium,
+                            fontFamily = PoppinsFontFamily
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = name,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = BrandText,
+                                fontFamily = PoppinsFontFamily,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .background(BrandPrimary.copy(alpha = 0.08f), RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = roleLabel,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BrandPrimary,
+                                    fontFamily = PoppinsFontFamily,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+
+                IconButton(
+                    onClick = onRefresh,
+                    modifier = Modifier
+                        .background(BrandLightSurface, RoundedCornerShape(12.dp))
+                        .size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Refresh",
+                        tint = BrandPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            HorizontalDivider(color = BrandBorder.copy(alpha = 0.5f))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Wallet Credits Info
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .background(BrandLightSurface, RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = BrandPrimary, modifier = Modifier.size(16.dp))
+                    Column {
+                        Text("Wallet Balance", fontSize = 10.sp, color = Color(0xFF64748B), fontFamily = PoppinsFontFamily)
+                        Text("$credits Kards", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = BrandText, fontFamily = PoppinsFontFamily)
+                    }
+                }
+
+                if (agentCount != null) {
+                    // Agent Network Count
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(BrandLightSurface, RoundedCornerShape(12.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.Groups, contentDescription = null, tint = BrandSecondary, modifier = Modifier.size(16.dp))
+                        Column {
+                            Text("Agent Network", fontSize = 10.sp, color = Color(0xFF64748B), fontFamily = PoppinsFontFamily)
+                            Text("$agentCount Agents", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = BrandText, fontFamily = PoppinsFontFamily)
+                        }
                     }
                 }
             }
-        }
-
-        IconButton(
-            onClick = onRefresh,
-            modifier = Modifier
-                .background(BrandLightSurface, RoundedCornerShape(12.dp))
-                .size(40.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Refresh,
-                contentDescription = "Refresh",
-                tint = BrandPrimary,
-                modifier = Modifier.size(20.dp)
-            )
         }
     }
 }
@@ -570,7 +618,7 @@ fun CardStatsBlock(
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Text("Visiting Card Stats", fontSize = 14.sp, color = Color(0xFF64748B), fontWeight = FontWeight.Bold)
+            Text("Visiting Card Stats", fontSize = 14.sp, color = Color(0xFF64748B), fontWeight = FontWeight.Bold, fontFamily = PoppinsFontFamily)
             Spacer(modifier = Modifier.height(14.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -593,55 +641,78 @@ fun QuickActionsSection(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text("Quick Actions", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = BrandText)
+        Text("Quick Actions", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = BrandText, fontFamily = PoppinsFontFamily)
+        
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            actions.forEach { action ->
-                Card(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { action.onClick() }
-                        .shadow(1.dp, RoundedCornerShape(16.dp)),
-                    colors = CardDefaults.cardColors(containerColor = BrandLightSurface),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, BrandBorder)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .background(Color.White, RoundedCornerShape(10.dp))
-                                .border(1.dp, BrandBorder, RoundedCornerShape(10.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = action.icon,
-                                contentDescription = null,
-                                tint = BrandPrimary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = action.label,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = BrandText,
-                            textAlign = TextAlign.Center,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+            actions.take(3).forEach { action ->
+                QuickActionGridCard(action = action, modifier = Modifier.weight(1f))
+            }
+            repeat(3 - actions.take(3).size) {
+                Spacer(modifier = Modifier.weight(1f))
+            }
+        }
+        
+        if (actions.size > 3) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                actions.drop(3).forEach { action ->
+                    QuickActionGridCard(action = action, modifier = Modifier.weight(1f))
+                }
+                repeat(3 - actions.drop(3).size) {
+                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun QuickActionGridCard(action: QuickActionItem, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier
+            .clickable { action.onClick() }
+            .shadow(1.dp, RoundedCornerShape(16.dp)),
+        colors = CardDefaults.cardColors(containerColor = BrandPrimary.copy(alpha = 0.02f)),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, BrandPrimary.copy(alpha = 0.15f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp, horizontal = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(Color.White, RoundedCornerShape(10.dp))
+                    .border(1.dp, BrandBorder, RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = action.icon,
+                    contentDescription = null,
+                    tint = BrandPrimary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = action.label,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = BrandText,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                fontFamily = PoppinsFontFamily,
+                lineHeight = 13.sp
+            )
         }
     }
 }
@@ -686,9 +757,10 @@ fun VisitingCardsListTab(
         ) {
             Text(
                 text = "Visiting Cards",
-                fontSize = 32.sp,
+                fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
-                color = BrandText
+                color = BrandText,
+                fontFamily = PoppinsFontFamily
             )
             IconButton(
                 onClick = onRefresh,
@@ -700,11 +772,53 @@ fun VisitingCardsListTab(
             }
         }
 
-        // Search Input
+        // + Create VKARD Button
+        Button(
+            onClick = { onCreateCard(null) },
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+            contentPadding = PaddingValues(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+                .shadow(
+                    elevation = 4.dp,
+                    shape = RoundedCornerShape(16.dp),
+                    ambientColor = BrandPrimary.copy(alpha = 0.4f),
+                    spotColor = BrandPrimary.copy(alpha = 0.4f)
+                )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(BrandPrimary, BrandSecondary)
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
+                    Text(
+                        text = "Create VKARD",
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = PoppinsFontFamily
+                    )
+                }
+            }
+        }
+
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            placeholder = { Text("Search cards...", color = Color(0xFF9CA3AF)) },
+            placeholder = { Text("Search cards...", color = Color(0xFF9CA3AF), fontFamily = PoppinsFontFamily, fontSize = 14.sp) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF64748B)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
@@ -757,7 +871,8 @@ fun VisitingCardsListTab(
                                     text = card.full_name,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = BrandText
+                                    color = BrandText,
+                                    fontFamily = PoppinsFontFamily
                                 )
                                 Box(
                                     modifier = Modifier
@@ -768,7 +883,8 @@ fun VisitingCardsListTab(
                                         text = card.status.uppercase(),
                                         fontSize = 9.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = statusColor
+                                        color = statusColor,
+                                        fontFamily = PoppinsFontFamily
                                     )
                                 }
                             }
@@ -776,14 +892,16 @@ fun VisitingCardsListTab(
                             Text(
                                 text = "${card.designation} at ${card.company_name}",
                                 fontSize = 12.sp,
-                                color = Color(0xFF64748B)
+                                color = Color(0xFF64748B),
+                                fontFamily = PoppinsFontFamily
                             )
                             if (card.subscriptions.isNotEmpty()) {
                                 val sub = card.subscriptions.first()
                                 Text(
                                     text = "Expires: ${sub.end_date.substringBefore("T")}",
-                                    fontSize = 10.sp,
-                                    color = Color(0xFF94A3B8)
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF94A3B8),
+                                    fontFamily = PoppinsFontFamily
                                 )
                             }
                         }
@@ -800,7 +918,7 @@ fun VisitingCardsListTab(
                                 modifier = Modifier.background(Color.White)
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("View Online") },
+                                    text = { Text("View Online", fontFamily = PoppinsFontFamily, fontSize = 14.sp) },
                                     leadingIcon = { Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(18.dp)) },
                                     onClick = {
                                         showMenu = false
@@ -809,7 +927,7 @@ fun VisitingCardsListTab(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Edit Card") },
+                                    text = { Text("Edit Card", fontFamily = PoppinsFontFamily, fontSize = 14.sp) },
                                     leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp)) },
                                     onClick = {
                                         showMenu = false
@@ -817,7 +935,7 @@ fun VisitingCardsListTab(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("QR Code") },
+                                    text = { Text("QR Code", fontFamily = PoppinsFontFamily, fontSize = 14.sp) },
                                     leadingIcon = { Icon(Icons.Default.QrCode, contentDescription = null, modifier = Modifier.size(18.dp)) },
                                     onClick = {
                                         showMenu = false
@@ -825,7 +943,7 @@ fun VisitingCardsListTab(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Copy Link") },
+                                    text = { Text("Copy Link", fontFamily = PoppinsFontFamily, fontSize = 14.sp) },
                                     leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp)) },
                                     onClick = {
                                         showMenu = false
@@ -833,7 +951,7 @@ fun VisitingCardsListTab(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Delete", color = BrandError) },
+                                    text = { Text("Delete", color = BrandError, fontFamily = PoppinsFontFamily, fontSize = 14.sp) },
                                     leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = BrandError, modifier = Modifier.size(18.dp)) },
                                     onClick = {
                                         showMenu = false
@@ -854,7 +972,7 @@ fun VisitingCardsListTab(
                             .padding(40.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("No digital cards match search query.", color = Color(0xFF64748B), fontSize = 14.sp)
+                        Text("No digital cards match search query.", color = Color(0xFF64748B), fontSize = 14.sp, fontFamily = PoppinsFontFamily)
                     }
                 }
             }
@@ -867,7 +985,8 @@ fun AgentsListTab(
     agents: List<AgentUiModel>,
     allCards: List<DigitalCardWithSub>,
     isSuperAdmin: Boolean,
-    onUpdateAgent: (agentId: String, name: String, credits: Int, status: String) -> Unit,
+    onUpdateAgent: (agentId: String, name: String, credits: Int, status: String, onComplete: (Result<Unit>) -> Unit) -> Unit,
+    onCreateAgent: (() -> Unit)?,
     onRefresh: () -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -896,9 +1015,10 @@ fun AgentsListTab(
         ) {
             Text(
                 text = "Agents Network",
-                fontSize = 32.sp,
+                fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
-                color = BrandText
+                color = BrandText,
+                fontFamily = PoppinsFontFamily
             )
             IconButton(
                 onClick = onRefresh,
@@ -910,6 +1030,51 @@ fun AgentsListTab(
             }
         }
 
+        // + Create Agent Button
+        if (onCreateAgent != null) {
+            Button(
+                onClick = onCreateAgent,
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                contentPadding = PaddingValues(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .shadow(
+                        elevation = 4.dp,
+                        shape = RoundedCornerShape(16.dp),
+                        ambientColor = BrandPrimary.copy(alpha = 0.4f),
+                        spotColor = BrandPrimary.copy(alpha = 0.4f)
+                    )
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(BrandPrimary, BrandSecondary)
+                            ),
+                            shape = RoundedCornerShape(16.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
+                        Text(
+                            text = "Create Agent",
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = PoppinsFontFamily
+                        )
+                    }
+                }
+            }
+        }
+
         if (isSuperAdmin) {
             Box(
                 modifier = Modifier
@@ -917,14 +1082,13 @@ fun AgentsListTab(
                     .padding(40.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text("Centralized sales agents registry is active.", color = Color(0xFF64748B), fontSize = 14.sp)
+                Text("Centralized sales agents registry is active.", color = Color(0xFF64748B), fontSize = 14.sp, fontFamily = PoppinsFontFamily)
             }
         } else {
-            // Search Input
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Search agents...", color = Color(0xFF9CA3AF)) },
+                placeholder = { Text("Search agents...", color = Color(0xFF9CA3AF), fontFamily = PoppinsFontFamily, fontSize = 14.sp) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF64748B)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
@@ -945,7 +1109,6 @@ fun AgentsListTab(
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
                 items(filteredAgents) { agent ->
-                    // Count cards assigned to this agent in memory
                     val totalCards = allCards.count { it.created_by == agent.id }
                     val activeCards = allCards.count { it.created_by == agent.id && it.status.lowercase() == "active" }
                     val isStateActive = agent.status == "active"
@@ -977,14 +1140,14 @@ fun AgentsListTab(
                                         .background(BrandLightSurface, RoundedCornerShape(22.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(agent.name.take(1).uppercase(), fontWeight = FontWeight.Bold, color = BrandPrimary, fontSize = 16.sp)
+                                    Text(agent.name.take(1).uppercase(), fontWeight = FontWeight.Bold, color = BrandPrimary, fontSize = 16.sp, fontFamily = PoppinsFontFamily)
                                 }
                                 Column {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
-                                        Text(agent.name, fontWeight = FontWeight.Bold, color = BrandText, fontSize = 15.sp)
+                                        Text(agent.name, fontWeight = FontWeight.Bold, color = BrandText, fontSize = 15.sp, fontFamily = PoppinsFontFamily)
                                         Box(
                                             modifier = Modifier
                                                 .background(
@@ -997,14 +1160,15 @@ fun AgentsListTab(
                                                 text = if (isStateActive) "ACTIVE" else "BLOCKED",
                                                 fontSize = 8.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = if (isStateActive) BrandSuccess else BrandError
+                                                color = if (isStateActive) BrandSuccess else BrandError,
+                                                fontFamily = PoppinsFontFamily
                                             )
                                         }
                                     }
-                                    Text("Code: ${agent.code} | Cards: $activeCards / $totalCards", color = Color(0xFF64748B), fontSize = 12.sp)
+                                    Text("Code: ${agent.code} | Cards: $activeCards / $totalCards", color = Color(0xFF64748B), fontSize = 12.sp, fontFamily = PoppinsFontFamily)
                                 }
                             }
-                            Text("${agent.credits} Kards", fontWeight = FontWeight.Bold, color = BrandPrimary, fontSize = 15.sp)
+                            Text("${agent.credits} Kards", fontWeight = FontWeight.Bold, color = BrandPrimary, fontSize = 15.sp, fontFamily = PoppinsFontFamily)
                         }
                     }
                 }
@@ -1017,7 +1181,7 @@ fun AgentsListTab(
                                 .padding(40.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("No registered franchise agents found.", color = Color(0xFF64748B), fontSize = 14.sp)
+                            Text("No registered franchise agents found.", color = Color(0xFF64748B), fontSize = 14.sp, fontFamily = PoppinsFontFamily)
                         }
                     }
                 }
@@ -1033,9 +1197,8 @@ fun AgentsListTab(
             agent = agent,
             assignedCardsCount = totalCards,
             onDismiss = { selectedAgentForEdit = null },
-            onSave = { newName, newCredits, newStatus ->
-                onUpdateAgent(agent.id, newName, newCredits, newStatus)
-                selectedAgentForEdit = null
+            onSave = { newName, newCredits, newStatus, onComplete ->
+                onUpdateAgent(agent.id, newName, newCredits, newStatus, onComplete)
             }
         )
     }
@@ -1046,21 +1209,28 @@ fun EditAgentDialog(
     agent: AgentUiModel,
     assignedCardsCount: Int,
     onDismiss: () -> Unit,
-    onSave: (newName: String, newCredits: Int, newStatus: String) -> Unit
+    onSave: (newName: String, newCredits: Int, newStatus: String, onComplete: (Result<Unit>) -> Unit) -> Unit
 ) {
     var name by remember { mutableStateOf(agent.name) }
     var credits by remember { mutableStateOf(agent.credits.toString()) }
     var status by remember { mutableStateOf(agent.status) }
 
+    var isSaving by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit Agent Profile", fontWeight = FontWeight.Bold) },
+        title = { Text("Edit Agent Profile", fontWeight = FontWeight.Bold, fontFamily = PoppinsFontFamily) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (errorMessage != null) {
+                    Text(errorMessage!!, color = BrandError, fontSize = 12.sp, fontFamily = PoppinsFontFamily)
+                }
+
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Agent Name") },
+                    label = { Text("Agent Name", fontFamily = PoppinsFontFamily) },
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1068,7 +1238,7 @@ fun EditAgentDialog(
                 OutlinedTextField(
                     value = credits,
                     onValueChange = { credits = it },
-                    label = { Text("Wallet Credits Balance") },
+                    label = { Text("Wallet Credits Balance", fontFamily = PoppinsFontFamily) },
                     shape = RoundedCornerShape(12.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
@@ -1079,7 +1249,7 @@ fun EditAgentDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Agent Active Status", fontWeight = FontWeight.Medium)
+                    Text("Agent Active Status", fontWeight = FontWeight.Medium, fontFamily = PoppinsFontFamily)
                     Switch(
                         checked = status == "active",
                         onCheckedChange = { status = if (it) "active" else "inactive" }
@@ -1096,23 +1266,44 @@ fun EditAgentDialog(
                             text = "Total Created Cards: $assignedCardsCount",
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
-                            color = BrandPrimary
+                            color = BrandPrimary,
+                            fontFamily = PoppinsFontFamily
                         )
                     }
                 }
             }
         },
         confirmButton = {
-            Button(
-                onClick = { onSave(name, credits.toIntOrNull() ?: 0, status) },
-                colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
-            ) {
-                Text("SAVE")
+            if (isSaving) {
+                CircularProgressIndicator(color = BrandPrimary, modifier = Modifier.size(24.dp))
+            } else {
+                Button(
+                    onClick = {
+                        val targetCredits = credits.toIntOrNull()
+                        if (targetCredits == null) {
+                            errorMessage = "Please enter a valid credit number."
+                            return@Button
+                        }
+                        isSaving = true
+                        errorMessage = null
+                        onSave(name, targetCredits, status) { result ->
+                            isSaving = false
+                            result.onSuccess {
+                                onDismiss()
+                            }.onFailure {
+                                errorMessage = it.message ?: "Failed to save agent details."
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
+                ) {
+                    Text("SAVE", fontFamily = PoppinsFontFamily)
+                }
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("CANCEL", color = Color(0xFF64748B))
+                Text("CANCEL", fontFamily = PoppinsFontFamily, color = Color(0xFF64748B))
             }
         }
     )
@@ -1128,13 +1319,13 @@ fun EditProfileDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit Profile Details", fontWeight = FontWeight.Bold) },
+        title = { Text("Edit Profile Details", fontWeight = FontWeight.Bold, fontFamily = PoppinsFontFamily) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Profile Name") },
+                    label = { Text("Profile Name", fontFamily = PoppinsFontFamily) },
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1145,12 +1336,12 @@ fun EditProfileDialog(
                 onClick = { onSave(name) },
                 colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
             ) {
-                Text("SAVE")
+                Text("SAVE", fontFamily = PoppinsFontFamily)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("CANCEL", color = Color(0xFF64748B))
+                Text("CANCEL", color = Color(0xFF64748B), fontFamily = PoppinsFontFamily)
             }
         }
     )
@@ -1163,10 +1354,6 @@ fun SupportTab(
     userCode: String,
     userEmail: String
 ) {
-    var name by remember { mutableStateOf(userName) }
-    var mobile by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf(userEmail) }
-    var code by remember { mutableStateOf(userCode) }
     var selectedIssue by remember { mutableStateOf("Login Problem") }
     var description by remember { mutableStateOf("") }
     var expandedIssueDropdown by remember { mutableStateOf(false) }
@@ -1196,14 +1383,16 @@ fun SupportTab(
         item {
             Text(
                 text = "Support Ticket",
-                fontSize = 32.sp,
+                fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
-                color = BrandText
+                color = BrandText,
+                fontFamily = PoppinsFontFamily
             )
             Text(
                 text = "Submit a support inquiry. This will launch WhatsApp directly.",
-                fontSize = 13.sp,
-                color = Color(0xFF64748B)
+                fontSize = 12.sp,
+                color = Color(0xFF64748B),
+                fontFamily = PoppinsFontFamily
             )
         }
 
@@ -1211,7 +1400,7 @@ fun SupportTab(
             Card(
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
-                border = BorderStroke(1.dp, BrandBorder),
+                border = BorderStroke(1.dp, BrandPrimary.copy(alpha = 0.15f)),
                 modifier = Modifier
                     .fillMaxWidth()
                     .shadow(2.dp, RoundedCornerShape(24.dp), ambientColor = Color(0x0A000000), spotColor = Color(0x0A000000))
@@ -1220,44 +1409,6 @@ fun SupportTab(
                     modifier = Modifier.padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    PremiumTextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        label = "Your Name",
-                        placeholder = "Name",
-                        required = true,
-                        leadingIcon = Icons.Default.Person
-                    )
-
-                    PremiumTextField(
-                        value = mobile,
-                        onValueChange = { mobile = it },
-                        label = "Mobile Number",
-                        placeholder = "e.g. +919876543210",
-                        required = true,
-                        leadingIcon = Icons.Default.Phone,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
-                    )
-
-                    PremiumTextField(
-                        value = email,
-                        onValueChange = { email = it },
-                        label = "Email Address",
-                        placeholder = "e.g. email@domain.com",
-                        required = true,
-                        leadingIcon = Icons.Default.Email,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
-                    )
-
-                    PremiumTextField(
-                        value = code,
-                        onValueChange = { code = it },
-                        label = "Agent / Franchise Code",
-                        placeholder = "e.g. AGENT-1234",
-                        leadingIcon = Icons.Default.Code
-                    )
-
-                    // Issue dropdown
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -1266,7 +1417,8 @@ fun SupportTab(
                             text = "Common Issue",
                             fontSize = 13.sp,
                             color = Color(0xFF4B5563),
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            fontFamily = PoppinsFontFamily
                         )
 
                         Box(modifier = Modifier.fillMaxWidth()) {
@@ -1283,9 +1435,10 @@ fun SupportTab(
                             ) {
                                 Text(
                                     text = selectedIssue,
-                                    fontSize = 17.sp,
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = BrandText
+                                    color = BrandText,
+                                    fontFamily = PoppinsFontFamily
                                 )
                                 Icon(
                                     imageVector = Icons.Default.ArrowDropDown,
@@ -1316,7 +1469,8 @@ fun SupportTab(
                                                     text = issue,
                                                     color = if (isSelected) BrandPrimary else BrandText,
                                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                    fontSize = 16.sp
+                                                    fontSize = 14.sp,
+                                                    fontFamily = PoppinsFontFamily
                                                 )
                                                 if (isSelected) {
                                                     Icon(
@@ -1338,29 +1492,30 @@ fun SupportTab(
                         }
                     }
 
-                    // Multiline Description
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "Issue Description",
+                            text = "Issue Description / Message",
                             fontSize = 13.sp,
                             color = Color(0xFF4B5563),
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            fontFamily = PoppinsFontFamily
                         )
 
                         OutlinedTextField(
                             value = description,
                             onValueChange = { description = it },
-                            placeholder = { Text("Describe the issue or feature request in detail...", color = Color(0xFF9CA3AF)) },
+                            placeholder = { Text("Describe the issue or feature request in detail...", color = Color(0xFF9CA3AF), fontFamily = PoppinsFontFamily, fontSize = 14.sp) },
                             minLines = 4,
                             maxLines = 8,
                             shape = RoundedCornerShape(18.dp),
                             textStyle = TextStyle(
-                                fontSize = 17.sp,
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = BrandText
+                                color = BrandText,
+                                fontFamily = PoppinsFontFamily
                             ),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedContainerColor = BrandLightSurface,
@@ -1376,18 +1531,16 @@ fun SupportTab(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Launch WhatsApp Button
                     Button(
                         onClick = {
-                            if (name.isBlank() || mobile.isBlank()) {
+                            if (description.isBlank()) {
                                 return@Button
                             }
                             val prefilledMessage = """
                                 *VKARD PRO Support Request*
-                                • Name: $name
+                                • Name: $userName
                                 • Role: $userRole
-                                • Code: $code
-                                • Mobile: $mobile
+                                • Code: $userCode
                                 • Issue: $selectedIssue
                                 
                                 *Description:*
@@ -1404,9 +1557,13 @@ fun SupportTab(
                             .fillMaxWidth()
                             .height(56.dp)
                     ) {
-                        Icon(Icons.Default.Chat, contentDescription = null, tint = Color.White)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("LAUNCH WHATSAPP SUPPORT", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Chat, contentDescription = null, tint = Color.White)
+                            Text("SEND ON WHATSAPP", fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = PoppinsFontFamily)
+                        }
                     }
                 }
             }
@@ -1419,37 +1576,56 @@ fun ProfileOptionsTab(
     name: String,
     email: String,
     role: String,
+    code: String,
+    credits: String,
+    activeCards: Int,
+    createdDate: String,
+    ledger: List<RevenueLedger>,
     onLogout: () -> Unit,
-    onEditProfile: () -> Unit
+    onEditProfile: () -> Unit,
+    viewModel: DashboardViewModel
 ) {
+    var showResetPasswordDialog by remember { mutableStateOf(false) }
+    var showLedgerDialog by remember { mutableStateOf(false) }
+    var isResettingPassword by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(20.dp))
         Text(
             text = "Profile Settings",
-            fontSize = 32.sp,
+            fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
             color = BrandText,
+            fontFamily = PoppinsFontFamily,
             modifier = Modifier.fillMaxWidth()
         )
 
+        // Glass Profile Details Card
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .shadow(4.dp, RoundedCornerShape(24.dp)),
             colors = CardDefaults.cardColors(containerColor = Color.White),
             shape = RoundedCornerShape(24.dp),
-            border = BorderStroke(1.dp, BrandBorder)
+            border = BorderStroke(1.dp, BrandPrimary.copy(alpha = 0.12f))
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(BrandPrimary.copy(alpha = 0.04f), Color.White)
+                        )
+                    )
+                    .padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Box(
                     modifier = Modifier
@@ -1460,58 +1636,260 @@ fun ProfileOptionsTab(
                 ) {
                     Text(
                         text = name.take(1).uppercase(),
-                        fontSize = 32.sp,
+                        fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = Color.White,
+                        fontFamily = PoppinsFontFamily
                     )
                 }
 
-                Text(name, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = BrandText)
-                Text(email, fontSize = 14.sp, color = Color(0xFF64748B))
+                Text(name, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = BrandText, fontFamily = PoppinsFontFamily)
+                Text(email, fontSize = 12.sp, color = Color(0xFF64748B), fontFamily = PoppinsFontFamily)
 
                 Box(
                     modifier = Modifier
                         .background(BrandPrimary.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
                         .padding(horizontal = 14.dp, vertical = 4.dp)
                 ) {
-                    Text(role.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = BrandPrimary)
+                    Text(role.uppercase(), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = BrandPrimary, fontFamily = PoppinsFontFamily)
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-                HorizontalDivider(color = BrandBorder)
-                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = BrandBorder.copy(alpha = 0.5f), modifier = Modifier.padding(vertical = 8.dp))
 
-                if (role.lowercase().contains("franchise")) {
-                    Button(
-                        onClick = onEditProfile,
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary, contentColor = Color.White),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp)
-                    ) {
-                        Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("EDIT PROFILE NAME", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-
-                Button(
-                    onClick = onLogout,
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandError, contentColor = Color.White),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
+                // Metadata Rows
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(Icons.Default.ExitToApp, contentDescription = null, tint = Color.White)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("SIGN OUT ACCOUNT", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    MetadataRowItem("Franchise / Agent Code", code)
+                    MetadataRowItem("Wallet Credits Balance", "$credits Kards")
+                    MetadataRowItem("Active Cards", "$activeCards Cards")
+                    MetadataRowItem("Registration Date", createdDate)
+                }
+            }
+        }
+
+        // Actions Panel Group
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(1.dp, BrandPrimary.copy(alpha = 0.15f))
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                if (role.lowercase().contains("franchise")) {
+                    ProfileActionRow("Edit Profile", Icons.Default.Edit) { onEditProfile() }
+                    HorizontalDivider(color = BrandBorder)
+                }
+                
+                ProfileActionRow("🔒 Reset Password", Icons.Default.Lock) {
+                    showResetPasswordDialog = true
+                }
+                
+                HorizontalDivider(color = BrandBorder)
+                
+                ProfileActionRow("Wallet History Ledger", Icons.Default.AccountBalanceWallet) {
+                    showLedgerDialog = true
+                }
+                
+                HorizontalDivider(color = BrandBorder)
+                
+                ProfileActionRow("Sign Out Account", Icons.Default.ExitToApp, isDestructive = true) {
+                    onLogout()
                 }
             }
         }
     }
+
+    if (showResetPasswordDialog) {
+        ResetPasswordDialog(
+            onDismiss = { showResetPasswordDialog = false },
+            onReset = { _, newPassword ->
+                isResettingPassword = true
+                viewModel.resetPassword(newPassword) { result ->
+                    isResettingPassword = false
+                    showResetPasswordDialog = false
+                }
+            },
+            isResetting = isResettingPassword
+        )
+    }
+
+    if (showLedgerDialog) {
+        WalletLedgerDialog(
+            ledger = ledger,
+            onDismiss = { showLedgerDialog = false }
+        )
+    }
+}
+
+@Composable
+fun ProfileActionRow(
+    label: String,
+    icon: ImageVector,
+    isDestructive: Boolean = false,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (isDestructive) BrandError else BrandPrimary,
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                text = label,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (isDestructive) BrandError else BrandText,
+                fontFamily = PoppinsFontFamily
+            )
+        }
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = Color(0xFF94A3B8),
+            modifier = Modifier.size(16.dp)
+        )
+    }
+}
+
+@Composable
+fun MetadataRowItem(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, fontSize = 12.sp, color = Color(0xFF64748B), fontFamily = PoppinsFontFamily)
+        Text(value, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = BrandText, fontFamily = PoppinsFontFamily)
+    }
+}
+
+@Composable
+fun ResetPasswordDialog(
+    onDismiss: () -> Unit,
+    onReset: (current: String, new: String) -> Unit,
+    isResetting: Boolean
+) {
+    var currentPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var errorMsg by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("🔒 Reset Password", fontWeight = FontWeight.Bold, fontFamily = PoppinsFontFamily, fontSize = 18.sp) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (errorMsg.isNotEmpty()) {
+                    Text(errorMsg, color = BrandError, fontSize = 12.sp, fontFamily = PoppinsFontFamily)
+                }
+                
+                OutlinedTextField(
+                    value = currentPassword,
+                    onValueChange = { currentPassword = it },
+                    label = { Text("Current Password", fontFamily = PoppinsFontFamily, fontSize = 12.sp) },
+                    shape = RoundedCornerShape(12.dp),
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                OutlinedTextField(
+                    value = newPassword,
+                    onValueChange = { newPassword = it },
+                    label = { Text("New Password", fontFamily = PoppinsFontFamily, fontSize = 12.sp) },
+                    shape = RoundedCornerShape(12.dp),
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = confirmPassword,
+                    onValueChange = { confirmPassword = it },
+                    label = { Text("Confirm New Password", fontFamily = PoppinsFontFamily, fontSize = 12.sp) },
+                    shape = RoundedCornerShape(12.dp),
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            if (isResetting) {
+                CircularProgressIndicator(color = BrandPrimary, modifier = Modifier.size(24.dp))
+            } else {
+                Button(
+                    onClick = {
+                        if (newPassword != confirmPassword) {
+                            errorMsg = "New passwords do not match."
+                            return@Button
+                        }
+                        if (newPassword.length < 6) {
+                            errorMsg = "Password must be at least 6 characters."
+                            return@Button
+                        }
+                        onReset(currentPassword, newPassword)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
+                ) {
+                    Text("RESET PASSWORD", fontFamily = PoppinsFontFamily, fontSize = 12.sp)
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("CANCEL", color = Color(0xFF64748B), fontFamily = PoppinsFontFamily, fontSize = 12.sp)
+            }
+        }
+    )
+}
+
+@Composable
+fun WalletLedgerDialog(
+    ledger: List<RevenueLedger>,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Recent VKARD Ledger", fontWeight = FontWeight.Bold, fontFamily = PoppinsFontFamily, fontSize = 18.sp) },
+        text = {
+            Box(modifier = Modifier.size(width = 320.dp, height = 400.dp)) {
+                if (ledger.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("No ledger transactions found.", color = Color(0xFF64748B), fontSize = 14.sp, fontFamily = PoppinsFontFamily)
+                    }
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(ledger) { item ->
+                            LedgerCardItem(item)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
+            ) {
+                Text("CLOSE", fontFamily = PoppinsFontFamily, fontSize = 12.sp)
+            }
+        }
+    )
 }
 
 @Composable
@@ -1552,7 +1930,7 @@ fun FloatingBottomNavigation(
             .shadow(12.dp, shape = RoundedCornerShape(24.dp)),
         color = Color.White,
         shape = RoundedCornerShape(24.dp),
-        border = BorderStroke(1.dp, BrandBorder)
+        border = BorderStroke(1.dp, BrandPrimary.copy(alpha = 0.15f))
     ) {
         Row(
             modifier = Modifier
@@ -1585,7 +1963,8 @@ fun FloatingBottomNavigation(
                         text = item.label,
                         fontSize = 10.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = tintColor
+                        color = tintColor,
+                        fontFamily = PoppinsFontFamily
                     )
                 }
             }
@@ -1616,19 +1995,22 @@ fun LedgerCardItem(item: RevenueLedger) {
                     text = item.transaction_type,
                     fontWeight = FontWeight.Bold,
                     color = BrandText,
-                    fontSize = 14.sp
+                    fontSize = 14.sp,
+                    fontFamily = PoppinsFontFamily
                 )
                 Text(
                     text = item.remarks ?: "-",
                     color = Color(0xFF64748B),
                     fontSize = 12.sp,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    fontFamily = PoppinsFontFamily
                 )
                 Text(
                     text = item.created_at.substringBefore("T"),
                     color = Color(0xFF94A3B8),
-                    fontSize = 10.sp
+                    fontSize = 10.sp,
+                    fontFamily = PoppinsFontFamily
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
@@ -1636,7 +2018,8 @@ fun LedgerCardItem(item: RevenueLedger) {
                 text = "${item.credits_used} Kards",
                 fontWeight = FontWeight.Bold,
                 color = if (item.credits_used > 0) BrandSuccess else BrandError,
-                fontSize = 15.sp
+                fontSize = 14.sp,
+                fontFamily = PoppinsFontFamily
             )
         }
     }
@@ -1648,80 +2031,10 @@ fun StatPillItem(label: String, value: String, color: Color) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Text(value, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = color)
-        Text(label, fontSize = 11.sp, color = Color(0xFF64748B), fontWeight = FontWeight.SemiBold)
+        Text(value, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = color, fontFamily = PoppinsFontFamily)
+        Text(label, fontSize = 11.sp, color = Color(0xFF64748B), fontWeight = FontWeight.SemiBold, fontFamily = PoppinsFontFamily)
     }
 }
-
-@Composable
-fun DashboardStatCard(
-    title: String,
-    value: String,
-    subtitle: String,
-    icon: ImageVector,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        modifier = modifier
-            .shadow(
-                elevation = 2.dp,
-                shape = RoundedCornerShape(24.dp),
-                ambientColor = Color(0x0F000000),
-                spotColor = Color(0x0F000000)
-            )
-            .border(1.dp, BrandBorder, RoundedCornerShape(24.dp)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    fontSize = 12.sp,
-                    color = Color(0xFF64748B),
-                    fontWeight = FontWeight.SemiBold
-                )
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .background(color.copy(alpha = 0.1f), RoundedCornerShape(8.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = color,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-            Text(
-                text = value,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = BrandText
-            )
-            if (subtitle.isNotEmpty()) {
-                Text(
-                    text = subtitle,
-                    fontSize = 11.sp,
-                    color = Color(0xFF94A3B8)
-                )
-            }
-        }
-    }
-}
-
-data class QuickActionItem(val label: String, val icon: ImageVector, val onClick: () -> Unit)
 
 @Composable
 fun PremiumTextField(
@@ -1747,14 +2060,16 @@ fun PremiumTextField(
                 text = label,
                 fontSize = 13.sp,
                 color = Color(0xFF4B5563),
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
+                fontFamily = PoppinsFontFamily
             )
             if (required) {
                 Text(
                     text = "*",
                     color = BrandError,
                     fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = PoppinsFontFamily
                 )
             }
         }
@@ -1762,16 +2077,17 @@ fun PremiumTextField(
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            placeholder = { Text(placeholder, color = Color(0xFF9CA3AF)) },
+            placeholder = { Text(placeholder, color = Color(0xFF9CA3AF), fontFamily = PoppinsFontFamily, fontSize = 14.sp) },
             leadingIcon = leadingIcon?.let {
                 { Icon(it, contentDescription = null, tint = if (isFocused) BrandPrimary else Color(0xFF9CA3AF)) }
             },
             keyboardOptions = keyboardOptions,
             shape = RoundedCornerShape(18.dp),
             textStyle = TextStyle(
-                fontSize = 17.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                color = BrandText
+                color = BrandText,
+                fontFamily = PoppinsFontFamily
             ),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = BrandLightSurface,
@@ -1868,9 +2184,10 @@ fun CustomersManagementTab(
         Spacer(modifier = Modifier.height(20.dp))
         Text(
             text = "Client Customers",
-            fontSize = 32.sp,
+            fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
             color = BrandText,
+            fontFamily = PoppinsFontFamily,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -1881,7 +2198,7 @@ fun CustomersManagementTab(
                 .shadow(4.dp, RoundedCornerShape(24.dp)),
             colors = CardDefaults.cardColors(containerColor = BrandLightSurface),
             shape = RoundedCornerShape(24.dp),
-            border = BorderStroke(1.dp, BrandBorder)
+            border = BorderStroke(1.dp, BrandPrimary.copy(alpha = 0.15f))
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
@@ -1894,13 +2211,15 @@ fun CustomersManagementTab(
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = BrandText,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    fontFamily = PoppinsFontFamily
                 )
                 Text(
                     text = "View all your registered clients, search customer details, and register new customers for digital visiting cards.",
                     fontSize = 13.sp,
                     color = Color(0xFF64748B),
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    fontFamily = PoppinsFontFamily
                 )
                 Button(
                     onClick = onManageCustomers,
@@ -1910,9 +2229,333 @@ fun CustomersManagementTab(
                         .fillMaxWidth()
                         .height(50.dp)
                 ) {
-                    Text("OPEN CUSTOMERS DIRECTORY", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("OPEN CUSTOMERS DIRECTORY", fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = PoppinsFontFamily)
                 }
             }
         }
     }
+}
+
+@Composable
+fun LatestVisitingCardsSection(
+    latestCards: List<DigitalCardWithSub>,
+    onCreateCard: (String?) -> Unit,
+    onViewAll: () -> Unit,
+    onShareCard: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Latest Visiting Cards",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = BrandText,
+                fontFamily = PoppinsFontFamily
+            )
+            if (latestCards.isNotEmpty()) {
+                TextButton(onClick = onViewAll) {
+                    Text(
+                        text = "View All Cards →",
+                        color = BrandPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = PoppinsFontFamily
+                    )
+                }
+            }
+        }
+
+        if (latestCards.isEmpty()) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, BrandBorder, RoundedCornerShape(20.dp)),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CreditCard,
+                        contentDescription = null,
+                        tint = BrandPrimary.copy(alpha = 0.6f),
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Text(
+                        text = "No visiting cards created yet.",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF64748B),
+                        fontFamily = PoppinsFontFamily
+                    )
+                    Button(
+                        onClick = { onCreateCard(null) },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
+                    ) {
+                        Text(
+                            text = "Create Your First VKARD",
+                            fontFamily = PoppinsFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+        } else {
+            latestCards.forEach { card ->
+                val statusColor = when (card.status.lowercase()) {
+                    "active" -> BrandSuccess
+                    "draft", "inactive" -> BrandWarning
+                    else -> BrandError
+                }
+                val expiryDate = card.subscriptions.firstOrNull()?.end_date?.substringBefore("T") ?: "N/A"
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(1.dp, RoundedCornerShape(16.dp), ambientColor = Color(0x05000000), spotColor = Color(0x05000000))
+                        .border(1.dp, BrandBorder, RoundedCornerShape(16.dp)),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .background(BrandLightSurface, RoundedCornerShape(10.dp))
+                                    .border(1.dp, BrandBorder, RoundedCornerShape(10.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = card.full_name.firstOrNull()?.toString()?.uppercase() ?: "V",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BrandPrimary,
+                                    fontFamily = PoppinsFontFamily
+                                )
+                            }
+
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    text = card.full_name,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BrandText,
+                                    fontFamily = PoppinsFontFamily,
+                                    maxLines = 1
+                                )
+                                Text(
+                                    text = card.company_name,
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF64748B),
+                                    fontFamily = PoppinsFontFamily,
+                                    maxLines = 1
+                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .background(statusColor.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = card.status.uppercase(),
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = statusColor,
+                                            fontFamily = PoppinsFontFamily
+                                        )
+                                    }
+                                    
+                                    Text(
+                                        text = "Expires: $expiryDate",
+                                        fontSize = 10.sp,
+                                        color = Color(0xFF94A3B8),
+                                        fontFamily = PoppinsFontFamily
+                                    )
+                                }
+                            }
+                        }
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(
+                                onClick = { onShareCard(card.slug) },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(BrandLightSurface, RoundedCornerShape(8.dp))
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.QrCode,
+                                    contentDescription = "QR Code",
+                                    tint = BrandPrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            
+                            IconButton(
+                                onClick = { onCreateCard(card.slug) },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(BrandLightSurface, RoundedCornerShape(8.dp))
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit Card",
+                                    tint = BrandSecondary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CreateAgentDialog(
+    franchiseCredits: Int,
+    onDismiss: () -> Unit,
+    onCreate: (name: String, email: String, pass: String, whatsapp: String, credits: Int, onComplete: (Result<Unit>) -> Unit) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var whatsapp by remember { mutableStateOf("") }
+    var credits by remember { mutableStateOf("10") }
+    
+    var isSaving by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add New Agent", fontWeight = FontWeight.Bold, fontFamily = PoppinsFontFamily) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (errorMessage != null) {
+                    Text(errorMessage!!, color = BrandError, fontSize = 12.sp, fontFamily = PoppinsFontFamily)
+                }
+                
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Agent Name", fontFamily = PoppinsFontFamily) },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("Email Address", fontFamily = PoppinsFontFamily) },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Initial Password", fontFamily = PoppinsFontFamily) },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                OutlinedTextField(
+                    value = whatsapp,
+                    onValueChange = { whatsapp = it },
+                    label = { Text("WhatsApp Number", fontFamily = PoppinsFontFamily) },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                OutlinedTextField(
+                    value = credits,
+                    onValueChange = { credits = it },
+                    label = { Text("Initial Credits Allocation", fontFamily = PoppinsFontFamily) },
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                Text(
+                    text = "Your Wallet Balance: $franchiseCredits Credits",
+                    fontSize = 12.sp,
+                    color = BrandPrimary,
+                    fontWeight = FontWeight.Medium,
+                    fontFamily = PoppinsFontFamily
+                )
+            }
+        },
+        confirmButton = {
+            if (isSaving) {
+                CircularProgressIndicator(color = BrandPrimary, modifier = Modifier.size(24.dp))
+            } else {
+                Button(
+                    onClick = {
+                        if (name.isBlank() || email.isBlank() || password.isBlank() || whatsapp.isBlank()) {
+                            errorMessage = "All fields are required."
+                            return@Button
+                        }
+                        val creditsNum = credits.toIntOrNull()
+                        if (creditsNum == null || creditsNum < 0) {
+                            errorMessage = "Credits must be a positive number."
+                            return@Button
+                        }
+                        if (creditsNum > franchiseCredits) {
+                            errorMessage = "Insufficient wallet credits."
+                            return@Button
+                        }
+                        isSaving = true
+                        errorMessage = null
+                        onCreate(name, email, password, whatsapp, creditsNum) { result ->
+                            isSaving = false
+                            result.onSuccess {
+                                onDismiss()
+                            }.onFailure {
+                                errorMessage = it.message ?: "Failed to create agent."
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
+                ) {
+                    Text("CREATE", fontFamily = PoppinsFontFamily)
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("CANCEL", fontFamily = PoppinsFontFamily, color = Color(0xFF64748B))
+            }
+        }
+    )
 }

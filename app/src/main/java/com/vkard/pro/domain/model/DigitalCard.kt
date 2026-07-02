@@ -43,5 +43,7 @@ data class DigitalCard(
     val theme_name: String? = "glass_purple",
     val credits_deducted: Boolean? = false,
     val enable_booking: Boolean? = false,
-    val booking_whatsapp: String? = null
+    val booking_whatsapp: String? = null,
+    @Serializable(with = SafeGalleryImagesSerializer::class)
+    val gallery_images: List<String> = emptyList()
 )

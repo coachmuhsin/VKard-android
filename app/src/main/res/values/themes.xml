@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Post-splash theme -->
     <style name="Theme.VKardPro" parent="@android:style/Theme.DeviceDefault.NoActionBar">
         <!-- No XML theme colors needed; theme colors are fully managed dynamically in Jetpack Compose -->
+    </style>
+
+    <!-- SplashScreen API Theme -->
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/white</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.VKardPro</item>
     </style>
 </resources>

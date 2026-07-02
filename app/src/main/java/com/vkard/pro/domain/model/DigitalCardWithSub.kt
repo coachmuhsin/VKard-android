@@ -26,5 +26,7 @@ data class DigitalCardWithSub(
     val created_by: String? = null,
     val created_at: String? = null,
     val theme_name: String? = "glass_purple",
-    val subscriptions: List<SubscriptionDto> = emptyList()
+    val subscriptions: List<SubscriptionDto> = emptyList(),
+    @Serializable(with = SafeGalleryImagesSerializer::class)
+    val gallery_images: List<String> = emptyList()
 )

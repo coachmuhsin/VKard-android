@@ -23,6 +23,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.add
 
 class CardRepositoryImpl(
     private val sessionManager: SecureSessionManager
@@ -94,7 +95,9 @@ class CardRepositoryImpl(
                 put("p_bank_account_number", card.bank_account_number)
                 put("p_bank_ifsc", card.bank_ifsc)
                 put("p_bank_branch", card.bank_branch)
-                put("p_gallery_images", jsonArrayOf()) // Empty list for now
+                put("p_gallery_images", buildJsonArray {
+                    card.gallery_images.forEach { add(it) }
+                })
                 put("p_brochure_url", card.logo_url)  // Backwards compatibility placeholder
                 put("p_theme_name", card.theme_name ?: "glass_purple")
                 put("p_card_type", card.card_type ?: "individual")

@@ -1,6 +1,7 @@
 package com.vkard.pro.presentation.navigation
 
 sealed class Screen(val route: String) {
+    object Splash : Screen("splash")
     object Login : Screen("login")
     object KycBlock : Screen("kyc_block")
     object Dashboard : Screen("dashboard")

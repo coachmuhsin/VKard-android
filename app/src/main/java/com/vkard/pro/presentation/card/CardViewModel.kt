@@ -1,6 +1,7 @@
 package com.vkard.pro.presentation.card
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
@@ -10,6 +11,10 @@ import com.vkard.pro.domain.model.DigitalCard
 import com.vkard.pro.domain.repository.CardRepository
 import com.vkard.pro.domain.repository.CustomerRepository
 import kotlinx.coroutines.launch
+import com.vkard.pro.data.remote.SupabaseClientProvider
+import io.github.jan.supabase.postgrest.postgrest
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 sealed interface CardFormUiState {
     object Idle : CardFormUiState
@@ -37,6 +42,8 @@ class CardViewModel(
     // Media URLs
     var logoUrl by mutableStateOf<String?>(null)
     var bannerUrl by mutableStateOf<String?>(null)
+    var galleryImages = mutableStateListOf<String>()
+    var isUploadingGallery by mutableStateOf(false)
     
     // Social links & details
     var websiteUrl by mutableStateOf("")
@@ -117,6 +124,20 @@ class CardViewModel(
                 }
         }
     }
+
+    fun uploadGalleryImage(base64Image: String) {
+        isUploadingGallery = true
+        viewModelScope.launch {
+            cardRepository.uploadMedia(base64Image)
+                .onSuccess {
+                    galleryImages.add(it)
+                    isUploadingGallery = false
+                }
+                .onFailure {
+                    isUploadingGallery = false
+                }
+        }
+    }
     
     var isEditMode by mutableStateOf(false)
     var editingCardId by mutableStateOf<String?>(null)
@@ -158,7 +179,39 @@ class CardViewModel(
         } else {
             slug.lowercase().trim()
         }
-        
+
+        if (!isEditMode && role != "super_admin") {
+            uiState = CardFormUiState.Loading
+            viewModelScope.launch {
+                try {
+                    val currentCredits = if (role == "franchise") {
+                        val response = SupabaseClientProvider.client.postgrest["franchises"]
+                            .select { filter { eq("id", userId) } }
+                            .decodeList<JsonObject>()
+                        response.firstOrNull()?.get("credits_balance")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                    } else {
+                        val response = SupabaseClientProvider.client.postgrest["agents"]
+                            .select { filter { eq("id", userId) } }
+                            .decodeList<JsonObject>()
+                        response.firstOrNull()?.get("credits_balance")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                    }
+                    
+                    if (currentCredits < 1) {
+                        uiState = CardFormUiState.Error("You don't have enough VKARD credits. Please purchase or request more credits.")
+                        return@launch
+                    }
+                    
+                    executeCardSubmission(customerId, computedSlug, status, role)
+                } catch (e: Exception) {
+                    uiState = CardFormUiState.Error("Verification failed: ${e.message}")
+                }
+            }
+        } else {
+            executeCardSubmission(customerId, computedSlug, status, role)
+        }
+    }
+
+    private fun executeCardSubmission(customerId: String, computedSlug: String, status: String, role: String) {
         val card = DigitalCard(
             id = editingCardId,
             customer_id = customerId,
@@ -196,7 +249,8 @@ class CardViewModel(
             content_display_mode = contentDisplayMode,
             enable_booking = enableBooking,
             booking_whatsapp = bookingWhatsapp.trim().ifBlank { null },
-            status = status
+            status = status,
+            gallery_images = galleryImages.toList()
         )
         
         uiState = CardFormUiState.Loading
@@ -257,6 +311,8 @@ class CardViewModel(
         enableBooking = card.enable_booking ?: false
         bookingWhatsapp = card.booking_whatsapp ?: ""
         selectedCustomerId = card.customer_id
+        galleryImages.clear()
+        galleryImages.addAll(card.gallery_images)
     }
     
     fun clearError() {

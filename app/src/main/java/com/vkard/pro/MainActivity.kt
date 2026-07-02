@@ -3,6 +3,8 @@ package com.vkard.pro
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.vkard.pro.presentation.splash.SplashScreen
 import androidx.compose.runtime.*
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -25,6 +27,7 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         
         val app = application as VKardApplication
@@ -39,23 +42,30 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val coroutineScope = rememberCoroutineScope()
                 
-                val startDestination = remember {
-                    if (sessionManager.isLoggedIn()) {
-                        val role = sessionManager.getRole()
-                        if (role == "super_admin") {
-                            Screen.Dashboard.route
-                        } else {
-                            Screen.KycBlock.route
-                        }
-                    } else {
-                        Screen.Login.route
-                    }
-                }
-                
                 NavHost(
                     navController = navController,
-                    startDestination = startDestination
+                    startDestination = Screen.Splash.route
                 ) {
+                    // Splash Screen Destination
+                    composable(Screen.Splash.route) {
+                        SplashScreen(
+                            onSplashComplete = {
+                                val destination = if (sessionManager.isLoggedIn()) {
+                                    val role = sessionManager.getRole()
+                                    if (role == "super_admin") {
+                                        Screen.Dashboard.route
+                                    } else {
+                                        Screen.KycBlock.route
+                                    }
+                                } else {
+                                    Screen.Login.route
+                                }
+                                navController.navigate(destination) {
+                                    popUpTo(Screen.Splash.route) { inclusive = true }
+                                }
+                            }
+                        )
+                    }
                     // Login Destination
                     composable(Screen.Login.route) {
                         val loginViewModel = remember { LoginViewModel(authRepository) }

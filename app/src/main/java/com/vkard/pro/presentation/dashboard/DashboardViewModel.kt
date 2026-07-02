@@ -68,7 +68,7 @@ data class AgentUiModel(
 class DashboardViewModel(
     private val authRepository: AuthRepository,
     private val cardRepository: CardRepository,
-    private val sessionManager: SecureSessionManager
+    val sessionManager: SecureSessionManager
 ) : ViewModel() {
     
     var uiState by mutableStateOf<DashboardUiState>(DashboardUiState.Loading)
@@ -86,12 +86,10 @@ class DashboardViewModel(
                 return@launch
             }
             try {
-                // Fetch cards with nested subscriptions
-                val cards = supabase.postgrest["digital_cards"]
+                // Fetch all cards with nested subscriptions
+                val allCards = supabase.postgrest["digital_cards"]
                     .select(columns = Columns.raw("*, subscriptions(*)"))
                     .decodeList<DigitalCardWithSub>()
-                
-                val cardStats = calculateCardStats(cards)
                 
                 // Fetch ledger entries
                 val ledger = cardRepository.getLedger(userId, role).getOrDefault(emptyList())
@@ -101,11 +99,14 @@ class DashboardViewModel(
                         val franchises = supabase.postgrest["franchises"].select().decodeList<JsonObject>()
                         val agents = supabase.postgrest["agents"].select().decodeList<JsonObject>()
                         
+                        val filteredCards = allCards // Super admin sees all cards
+                        val cardStats = calculateCardStats(filteredCards)
+                        
                         uiState = DashboardUiState.SuperAdminData(
                             franchiseCount = franchises.size,
                             agentCount = agents.size,
                             cardStats = cardStats,
-                            cards = cards,
+                            cards = filteredCards,
                             ledger = ledger
                         )
                     }
@@ -144,12 +145,17 @@ class DashboardViewModel(
                             )
                         }
                         
+                        // Filter: Franchise sees their own cards + cards created by their child agents
+                        val agentIds = agentNetwork.map { it.id }.toSet()
+                        val filteredCards = allCards.filter { it.created_by == userId || agentIds.contains(it.created_by) }
+                        val cardStats = calculateCardStats(filteredCards)
+                        
                         uiState = DashboardUiState.FranchiseData(
                             name = name,
                             code = code,
                             credits = credits,
                             cardStats = cardStats,
-                            cards = cards,
+                            cards = filteredCards,
                             agentNetwork = agentNetwork,
                             ledger = ledger
                         )
@@ -183,19 +189,68 @@ class DashboardViewModel(
                             affiliation = franchiseList.firstOrNull()?.get("name")?.jsonPrimitive?.content ?: "Franchise"
                         }
                         
+                        // Filter: Agent sees only their own created cards
+                        val filteredCards = allCards.filter { it.created_by == userId }
+                        val cardStats = calculateCardStats(filteredCards)
+                        
                         uiState = DashboardUiState.AgentData(
                             name = name,
                             code = code,
                             credits = credits,
                             affiliation = affiliation,
                             cardStats = cardStats,
-                            cards = cards,
+                            cards = filteredCards,
                             ledger = ledger
                         )
                     }
                 }
             } catch (e: Exception) {
                 uiState = DashboardUiState.Error(e.message ?: "Failed to load dashboard.")
+            }
+        }
+    }
+
+    fun deleteCard(cardId: String) {
+        viewModelScope.launch {
+            cardRepository.deleteCard(cardId)
+                .onSuccess {
+                    loadDashboard()
+                }
+        }
+    }
+
+    fun updateAgent(agentId: String, newName: String, newCredits: Int, newStatus: String) {
+        viewModelScope.launch {
+            try {
+                supabase.postgrest["agents"].update({
+                    set("name", newName)
+                    set("credits_balance", newCredits)
+                    set("status", newStatus)
+                }) {
+                    filter {
+                        eq("id", agentId)
+                    }
+                }
+                loadDashboard()
+            } catch (e: Exception) {
+                // Fail silently or log
+            }
+        }
+    }
+
+    fun updateFranchiseProfile(franchiseId: String, newName: String) {
+        viewModelScope.launch {
+            try {
+                supabase.postgrest["franchises"].update({
+                    set("name", newName)
+                }) {
+                    filter {
+                        eq("id", franchiseId)
+                    }
+                }
+                loadDashboard()
+            } catch (e: Exception) {
+                // Fail silently or log
             }
         }
     }

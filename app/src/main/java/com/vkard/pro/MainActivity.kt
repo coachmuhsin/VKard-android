@@ -140,8 +140,13 @@ class MainActivity : ComponentActivity() {
                         DashboardScreen(
                             viewModel = dashboardViewModel,
                             role = role,
-                            onCreateCard = {
-                                navController.navigate(Screen.CardCreate.route)
+                            onCreateCard = { slug ->
+                                val route = if (slug != null) {
+                                    Screen.CardCreate.route + "?cardSlug=$slug"
+                                } else {
+                                    Screen.CardCreate.route
+                                }
+                                navController.navigate(route)
                             },
                             onManageCustomers = {
                                 navController.navigate(Screen.CustomerList.route)
@@ -162,17 +167,32 @@ class MainActivity : ComponentActivity() {
                     
                     // Card Creation Destination (Supports optional customerId argument)
                     composable(
-                        route = Screen.CardCreate.route + "?customerId={customerId}",
-                        arguments = listOf(navArgument("customerId") {
-                            type = NavType.StringType
-                            nullable = true
-                            defaultValue = null
-                        })
+                        route = Screen.CardCreate.route + "?customerId={customerId}&cardSlug={cardSlug}",
+                        arguments = listOf(
+                            navArgument("customerId") {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                            navArgument("cardSlug") {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            }
+                        )
                     ) { backStackEntry ->
                         val customerId = backStackEntry.arguments?.getString("customerId")
+                        val cardSlug = backStackEntry.arguments?.getString("cardSlug")
                         val cardViewModel = remember {
                             CardViewModel(cardRepository, customerRepository)
                         }
+                        
+                        LaunchedEffect(cardSlug) {
+                            if (cardSlug != null) {
+                                cardViewModel.loadCardForEdit(cardSlug)
+                            }
+                        }
+                        
                         CardCreateScreen(
                             viewModel = cardViewModel,
                             sessionManager = sessionManager,

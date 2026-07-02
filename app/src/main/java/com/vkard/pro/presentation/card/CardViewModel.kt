@@ -118,6 +118,29 @@ class CardViewModel(
         }
     }
     
+    var isEditMode by mutableStateOf(false)
+    var editingCardId by mutableStateOf<String?>(null)
+
+    fun loadCardForEdit(slug: String) {
+        uiState = CardFormUiState.Loading
+        viewModelScope.launch {
+            cardRepository.getCardBySlug(slug)
+                .onSuccess { card ->
+                    if (card != null) {
+                        isEditMode = true
+                        editingCardId = card.id
+                        setEditData(card)
+                        uiState = CardFormUiState.Idle
+                    } else {
+                        uiState = CardFormUiState.Error("Card not found.")
+                    }
+                }
+                .onFailure {
+                    uiState = CardFormUiState.Error(it.message ?: "Failed to load card.")
+                }
+        }
+    }
+
     fun submitCard(userId: String, role: String, status: String = "active") {
         val customerId = selectedCustomerId
         if (customerId == null) {
@@ -137,6 +160,7 @@ class CardViewModel(
         }
         
         val card = DigitalCard(
+            id = editingCardId,
             customer_id = customerId,
             slug = computedSlug,
             full_name = fullName.trim(),
@@ -177,13 +201,23 @@ class CardViewModel(
         
         uiState = CardFormUiState.Loading
         viewModelScope.launch {
-            cardRepository.createCard(card, role)
-                .onSuccess {
-                    uiState = CardFormUiState.Success(it)
-                }
-                .onFailure {
-                    uiState = CardFormUiState.Error(it.message ?: "Failed to save visiting card.")
-                }
+            if (isEditMode) {
+                cardRepository.updateCard(card)
+                    .onSuccess {
+                        uiState = CardFormUiState.Success(card.slug)
+                    }
+                    .onFailure {
+                        uiState = CardFormUiState.Error(it.message ?: "Failed to update visiting card.")
+                    }
+            } else {
+                cardRepository.createCard(card, role)
+                    .onSuccess {
+                        uiState = CardFormUiState.Success(it)
+                    }
+                    .onFailure {
+                        uiState = CardFormUiState.Error(it.message ?: "Failed to create visiting card.")
+                    }
+            }
         }
     }
     

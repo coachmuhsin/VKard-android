@@ -1,0 +1,213 @@
+name: Android Production Build
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Release Android App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for automatic release notes
+
+      - name: Record Start Time
+        run: echo "START_TIME=$(date +%s)" >> $GITHUB_ENV
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-read-only: false
+
+      - name: Make Gradle Wrapper Executable
+        run: chmod +x gradlew
+
+      - name: Generate local.properties and Setup Keystore
+        run: |
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" > local.properties
+          echo "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" >> local.properties
+          
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > release.keystore
+            echo "RELEASE_STORE_FILE=../release.keystore" >> local.properties
+            echo "RELEASE_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> local.properties
+            echo "RELEASE_KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> local.properties
+            echo "RELEASE_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> local.properties
+            echo "HAS_SIGNING=true" >> $GITHUB_ENV
+            echo "Signing keys and keystore setup successfully completed."
+          else
+            echo "HAS_SIGNING=false" >> $GITHUB_ENV
+            echo "::warning::KEYSTORE_BASE64 secret is missing. Release build will be skipped or run unsigned."
+          fi
+        shell: bash
+
+      - name: Detect Version and Generate version.json
+        run: |
+          versionCode=$(grep "versionCode =" app/build.gradle.kts | sed 's/[^0-9]//g')
+          versionName=$(grep "versionName =" app/build.gradle.kts | cut -d '"' -f 2)
+          echo "VERSION_CODE=$versionCode" >> $GITHUB_ENV
+          echo "VERSION_NAME=$versionName" >> $GITHUB_ENV
+          
+          # Create build_outputs directory
+          mkdir -p build_outputs
+          
+          # Gather changes
+          commits=$(git log -n 5 --pretty=format:"%s" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk '{print "    \"" $0 "\""}' | paste -sd, -)
+          
+          # Generate version.json
+          cat <<EOF > build_outputs/version.json
+{
+  "versionCode": $versionCode,
+  "versionName": "$versionName",
+  "apk": "https://github.com/coachmuhsin/VKard-android/releases/latest/download/VKARD-PRO.apk",
+  "changes": [
+$commits
+  ]
+}
+EOF
+          
+          # Generate standard release notes body
+          raw_commits=$(git log -n 5 --pretty=format:"* %s")
+          echo "COMMIT_CHANGES<<EOF" >> $GITHUB_ENV
+          echo "$raw_commits" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          
+          echo "version.json generated successfully:"
+          cat build_outputs/version.json
+        shell: bash
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --build-cache --parallel --no-daemon
+
+      - name: Build Release APK & Bundle (Signed)
+        if: env.HAS_SIGNING == 'true'
+        run: |
+          ./gradlew assembleRelease bundleRelease --build-cache --parallel --no-daemon
+        continue-on-error: true
+
+      - name: Verify Builds and Package Outputs
+        run: |
+          mkdir -p build_outputs
+          
+          # Check if signed release build succeeded
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk build_outputs/VKARD-PRO.apk
+            cp app/build/outputs/bundle/release/app-release.aab build_outputs/VKARD-PRO.aab
+            echo "IS_RELEASE_READY=true" >> $GITHUB_ENV
+            echo "Successfully packaged signed Release APK and AAB."
+          else
+            # Fallback to Debug APK for releases
+            cp app/build/outputs/apk/debug/app-debug.apk build_outputs/VKARD-PRO.apk
+            echo "IS_RELEASE_READY=false" >> $GITHUB_ENV
+            echo "::warning::Release build failed or was skipped. Packaged Debug APK as VKARD-PRO.apk fallback."
+          fi
+        shell: bash
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION_NAME }}
+          name: VKARD PRO v${{ env.VERSION_NAME }}
+          body: |
+            ## Release notes for VKARD PRO v${{ env.VERSION_NAME }}
+            
+            Automatically built by GitHub Actions.
+            
+            ### Artifacts
+            * [VKARD-PRO.apk](https://github.com/coachmuhsin/VKard-android/releases/download/v${{ env.VERSION_NAME }}/VKARD-PRO.apk)
+            * [VKARD-PRO.aab](https://github.com/coachmuhsin/VKard-android/releases/download/v${{ env.VERSION_NAME }}/VKARD-PRO.aab) (if release keys provided)
+            * [version.json](https://github.com/coachmuhsin/VKard-android/releases/download/v${{ env.VERSION_NAME }}/version.json)
+            
+            ### Commit History (Last 5 changes)
+            ${{ env.COMMIT_CHANGES }}
+          files: |
+            build_outputs/VKARD-PRO.apk
+            build_outputs/VKARD-PRO.aab
+            build_outputs/version.json
+          fail_on_unsupported_status: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: app/build/outputs/apk/debug/**/*.apk
+
+      - name: Upload Release APK Artifact
+        if: env.IS_RELEASE_READY == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk
+          path: app/build/outputs/apk/release/**/*.apk
+
+      - name: Upload Release AAB Artifact
+        if: env.IS_RELEASE_READY == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-aab
+          path: app/build/outputs/bundle/release/**/*.aab
+
+      - name: Cleanup Keystore
+        if: always()
+        run: |
+          rm -f release.keystore
+          echo "Temporary keystore cleaned up."
+        shell: bash
+
+      - name: Print Output Summary
+        if: always()
+        run: |
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+          MIN=$((DURATION / 60))
+          SEC=$((DURATION % 60))
+          
+          echo "=================================================="
+          echo "                 BUILD SUMMARY                    "
+          echo "=================================================="
+          echo "Release Tag: v${{ env.VERSION_NAME }}"
+          echo "Release URL: https://github.com/coachmuhsin/VKard-android/releases/tag/v${{ env.VERSION_NAME }}"
+          echo "APK Download URL: https://github.com/coachmuhsin/VKard-android/releases/latest/download/VKARD-PRO.apk"
+          echo "AAB Download URL: https://github.com/coachmuhsin/VKard-android/releases/download/v${{ env.VERSION_NAME }}/VKARD-PRO.aab"
+          echo "Workflow duration: ${MIN}m ${SEC}s"
+          echo "=================================================="
+        shell: bash
+
+      # FUTURE READY PLACEHOLDERS:
+      # To enable automatic Google Play or Firebase App Distribution publishing,
+      # configure the parameters below and uncomment the steps.
+      
+      # - name: Publish to Google Play Internal Testing
+      #   if: env.IS_RELEASE_READY == 'true' && false # Set to true to enable
+      #   uses: r0adkll/upload-google-play@v1
+      #   with:
+      #     serviceAccountJsonRaw: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+      #     packageName: com.vkard.pro
+      #     releaseFiles: build_outputs/VKARD-PRO.aab
+      #     track: internal
+      
+      # - name: Upload to Firebase App Distribution
+      #   if: env.IS_RELEASE_READY == 'true' && false # Set to true to enable
+      #   uses: wzieba/Firebase-App-Distribution@v2
+      #   with:
+      #     appId: ${{ secrets.FIREBASE_APP_ID }}
+      #     token: ${{ secrets.FIREBASE_CLI_TOKEN }}
+      #     groups: testers
+      #     file: build_outputs/VKARD-PRO.apk

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.VKardPro" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <!-- No XML theme colors needed; theme colors are fully managed dynamically in Jetpack Compose -->
+    </style>
+</resources>

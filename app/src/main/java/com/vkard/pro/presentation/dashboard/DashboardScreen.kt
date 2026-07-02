@@ -8,6 +8,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import com.vkard.pro.BuildConfig
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -61,6 +64,7 @@ data class QuickActionItem(val label: String, val icon: ImageVector, val onClick
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel,
+    updateViewModel: com.vkard.pro.presentation.update.UpdateViewModel,
     role: String,
     onCreateCard: (String?) -> Unit,
     onManageCustomers: () -> Unit,
@@ -72,6 +76,7 @@ fun DashboardScreen(
 
     LaunchedEffect(Unit) {
         viewModel.loadDashboard()
+        updateViewModel.checkForUpdates(forceRefresh = false)
     }
 
     Scaffold(
@@ -84,13 +89,25 @@ fun DashboardScreen(
             )
         }
     ) { paddingValues ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
                 .background(BrandBackground)
         ) {
-            when (uiState) {
+            if (updateViewModel.showUpdateBanner) {
+                com.vkard.pro.presentation.update.UpdateBanner(
+                    versionInfo = updateViewModel.latestVersionInfo,
+                    onDismiss = { updateViewModel.dismissUpdate() },
+                    onUpdateClick = { updateViewModel.startDownload() }
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(BrandBackground)
+            ) {
+                when (uiState) {
                 is DashboardUiState.Loading -> {
                     DashboardSkeletonLoader()
                 }
@@ -125,9 +142,13 @@ fun DashboardScreen(
                         onCreateCard = onCreateCard,
                         onManageCustomers = onManageCustomers,
                         onLogout = onLogout,
-                        onRefresh = { viewModel.loadDashboard() },
+                        onRefresh = {
+                            viewModel.loadDashboard()
+                            updateViewModel.checkForUpdates(forceRefresh = true)
+                        },
                         onDeleteCard = { viewModel.deleteCard(it) },
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        updateViewModel = updateViewModel
                     )
                 }
                 is DashboardUiState.FranchiseData -> {
@@ -139,7 +160,10 @@ fun DashboardScreen(
                         onCreateCard = onCreateCard,
                         onManageCustomers = onManageCustomers,
                         onLogout = onLogout,
-                        onRefresh = { viewModel.loadDashboard() },
+                        onRefresh = {
+                            viewModel.loadDashboard()
+                            updateViewModel.checkForUpdates(forceRefresh = true)
+                        },
                         onDeleteCard = { viewModel.deleteCard(it) },
                         onUpdateAgent = { agentId, newName, newCredits, newStatus, onComplete ->
                             viewModel.updateAgent(agentId, newName, newCredits, newStatus, onComplete)
@@ -148,7 +172,8 @@ fun DashboardScreen(
                             val userId = viewModel.sessionManager.getUserId() ?: ""
                             viewModel.updateFranchiseProfile(userId, newName)
                         },
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        updateViewModel = updateViewModel
                     )
                 }
                 is DashboardUiState.AgentData -> {
@@ -160,14 +185,19 @@ fun DashboardScreen(
                         onCreateCard = onCreateCard,
                         onManageCustomers = onManageCustomers,
                         onLogout = onLogout,
-                        onRefresh = { viewModel.loadDashboard() },
+                        onRefresh = {
+                            viewModel.loadDashboard()
+                            updateViewModel.checkForUpdates(forceRefresh = true)
+                        },
                         onDeleteCard = { viewModel.deleteCard(it) },
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        updateViewModel = updateViewModel
                     )
                 }
             }
         }
     }
+}
 }
 
 // ----------------------------------------------------
@@ -185,7 +215,8 @@ fun SuperAdminView(
     onLogout: () -> Unit,
     onRefresh: () -> Unit,
     onDeleteCard: (String) -> Unit,
-    viewModel: DashboardViewModel
+    viewModel: DashboardViewModel,
+    updateViewModel: com.vkard.pro.presentation.update.UpdateViewModel
 ) {
     when (selectedTab) {
         "home" -> {
@@ -249,7 +280,8 @@ fun SuperAdminView(
                 ledger = data.ledger,
                 onLogout = onLogout,
                 onEditProfile = {},
-                viewModel = viewModel
+                viewModel = viewModel,
+                updateViewModel = updateViewModel
             )
         }
     }
@@ -268,7 +300,8 @@ fun FranchiseView(
     onDeleteCard: (String) -> Unit,
     onUpdateAgent: (agentId: String, newName: String, newCredits: Int, newStatus: String, onComplete: (Result<Unit>) -> Unit) -> Unit,
     onUpdateProfile: (String) -> Unit,
-    viewModel: DashboardViewModel
+    viewModel: DashboardViewModel,
+    updateViewModel: com.vkard.pro.presentation.update.UpdateViewModel
 ) {
     var showEditProfileDialog by remember { mutableStateOf(false) }
     val userId = viewModel.sessionManager.getUserId() ?: ""
@@ -348,7 +381,8 @@ fun FranchiseView(
                 ledger = data.ledger,
                 onLogout = onLogout,
                 onEditProfile = { showEditProfileDialog = true },
-                viewModel = viewModel
+                viewModel = viewModel,
+                updateViewModel = updateViewModel
             )
         }
     }
@@ -376,7 +410,8 @@ fun AgentView(
     onLogout: () -> Unit,
     onRefresh: () -> Unit,
     onDeleteCard: (String) -> Unit,
-    viewModel: DashboardViewModel
+    viewModel: DashboardViewModel,
+    updateViewModel: com.vkard.pro.presentation.update.UpdateViewModel
 ) {
     val userId = viewModel.sessionManager.getUserId() ?: ""
     when (selectedTab) {
@@ -434,7 +469,8 @@ fun AgentView(
                 ledger = data.ledger,
                 onLogout = onLogout,
                 onEditProfile = {},
-                viewModel = viewModel
+                viewModel = viewModel,
+                updateViewModel = updateViewModel
             )
         }
     }
@@ -1583,7 +1619,8 @@ fun ProfileOptionsTab(
     ledger: List<RevenueLedger>,
     onLogout: () -> Unit,
     onEditProfile: () -> Unit,
-    viewModel: DashboardViewModel
+    viewModel: DashboardViewModel,
+    updateViewModel: com.vkard.pro.presentation.update.UpdateViewModel
 ) {
     var showResetPasswordDialog by remember { mutableStateOf(false) }
     var showLedgerDialog by remember { mutableStateOf(false) }
@@ -1593,6 +1630,7 @@ fun ProfileOptionsTab(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -1699,6 +1737,114 @@ fun ProfileOptionsTab(
                 }
             }
         }
+
+        // App Information Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(1.dp, BrandPrimary.copy(alpha = 0.15f))
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "App Information",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = BrandText,
+                    fontFamily = PoppinsFontFamily
+                )
+                
+                MetadataRowItem("App Name", "VKARD PRO")
+                MetadataRowItem("Version", BuildConfig.VERSION_NAME)
+                MetadataRowItem("Build", BuildConfig.VERSION_CODE.toString())
+                MetadataRowItem("Package", context.packageName)
+                
+                val info = updateViewModel.latestVersionInfo
+                if (info != null) {
+                    MetadataRowItem("Release Date", info.releaseDate)
+                }
+                
+                MetadataRowItem("Last Checked", updateViewModel.lastCheckedDisplay)
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Update Status",
+                        fontSize = 13.sp,
+                        color = Color(0xFF64748B),
+                        fontFamily = PoppinsFontFamily
+                    )
+                    
+                    if (info != null && info.versionCode > BuildConfig.VERSION_CODE) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(Color.Red, RoundedCornerShape(4.dp))
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Update Available",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Red,
+                                fontFamily = PoppinsFontFamily
+                            )
+                        }
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(BrandSuccess, RoundedCornerShape(4.dp))
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Latest Version",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = BrandSuccess,
+                                fontFamily = PoppinsFontFamily
+                            )
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                if (info != null && info.versionCode > BuildConfig.VERSION_CODE) {
+                    Button(
+                        onClick = { updateViewModel.startDownload() },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandError),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Update Now", color = Color.White, fontWeight = FontWeight.Bold, fontFamily = PoppinsFontFamily)
+                    }
+                } else {
+                    Button(
+                        onClick = { updateViewModel.checkForUpdates(forceRefresh = true) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        if (updateViewModel.isCheckingUpdates) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                        } else {
+                            Text("Check for Updates", color = Color.White, fontWeight = FontWeight.Bold, fontFamily = PoppinsFontFamily)
+                        }
+                    }
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(20.dp))
     }
 
     if (showResetPasswordDialog) {

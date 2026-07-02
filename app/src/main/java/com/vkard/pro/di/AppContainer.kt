@@ -9,6 +9,12 @@ import com.vkard.pro.domain.repository.AuthRepository
 import com.vkard.pro.domain.repository.CardRepository
 import com.vkard.pro.domain.repository.CustomerRepository
 
+import com.vkard.pro.data.remote.UpdateApiService
+import com.vkard.pro.data.repository.UpdateRepositoryImpl
+import com.vkard.pro.domain.repository.UpdateRepository
+import com.vkard.pro.presentation.update.UpdateManager
+import com.vkard.pro.presentation.update.UpdateViewModel
+
 class AppContainer(context: Context) {
     val sessionManager = SecureSessionManager(context)
     
@@ -22,5 +28,19 @@ class AppContainer(context: Context) {
     
     val customerRepository: CustomerRepository by lazy {
         CustomerRepositoryImpl()
+    }
+
+    val updateApiService = UpdateApiService()
+    
+    val updateRepository: UpdateRepository by lazy {
+        UpdateRepositoryImpl(context, updateApiService)
+    }
+    
+    val updateManager by lazy {
+        UpdateManager(context)
+    }
+    
+    val updateViewModelFactory: () -> UpdateViewModel = {
+        UpdateViewModel(updateRepository, updateManager)
     }
 }

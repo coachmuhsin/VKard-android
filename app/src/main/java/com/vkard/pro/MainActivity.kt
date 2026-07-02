@@ -25,6 +25,15 @@ import com.vkard.pro.presentation.qr.QrCodeShareScreen
 import com.vkard.pro.presentation.theme.VKardProTheme
 import kotlinx.coroutines.launch
 
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import com.vkard.pro.presentation.update.UpdateViewModel
+import com.vkard.pro.presentation.update.ForceUpdateScreen
+import com.vkard.pro.presentation.update.DownloadProgressDialog
+import com.vkard.pro.presentation.update.InstallReadyDialog
+import com.vkard.pro.domain.model.DownloadState
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -36,16 +45,23 @@ class MainActivity : ComponentActivity() {
         val authRepository = container.authRepository
         val cardRepository = container.cardRepository
         val customerRepository = container.customerRepository
+        val updateViewModelFactory = container.updateViewModelFactory
         
         setContent {
             VKardProTheme {
                 val navController = rememberNavController()
                 val coroutineScope = rememberCoroutineScope()
+                val updateViewModel: UpdateViewModel = remember { updateViewModelFactory() }
                 
-                NavHost(
-                    navController = navController,
-                    startDestination = Screen.Splash.route
-                ) {
+                LaunchedEffect(Unit) {
+                    updateViewModel.checkForUpdates(forceRefresh = false)
+                }
+                
+                Box(modifier = Modifier.fillMaxSize()) {
+                    NavHost(
+                        navController = navController,
+                        startDestination = Screen.Splash.route
+                    ) {
                     // Splash Screen Destination
                     composable(Screen.Splash.route) {
                         SplashScreen(
@@ -149,6 +165,7 @@ class MainActivity : ComponentActivity() {
                         val role = sessionManager.getRole() ?: "agent"
                         DashboardScreen(
                             viewModel = dashboardViewModel,
+                            updateViewModel = updateViewModel,
                             role = role,
                             onCreateCard = { slug ->
                                 val route = if (slug != null) {
@@ -247,6 +264,37 @@ class MainActivity : ComponentActivity() {
                                 navController.popBackStack(Screen.Dashboard.route, false)
                             }
                         )
+                    }
+                }
+                    
+                    val forceUpdateInfo = updateViewModel.latestVersionInfo
+                    if (forceUpdateInfo != null && forceUpdateInfo.forceUpdate) {
+                        ForceUpdateScreen(
+                            versionInfo = forceUpdateInfo,
+                            downloadState = updateViewModel.downloadState,
+                            onUpdateClick = { updateViewModel.startDownload() },
+                            onInstallClick = { updateViewModel.checkAndInstall() }
+                        )
+                    }
+
+                    when (val state = updateViewModel.downloadState) {
+                        is DownloadState.Downloading -> {
+                            if (forceUpdateInfo?.forceUpdate != true) {
+                                DownloadProgressDialog(
+                                    progress = state.progress,
+                                    onDismiss = {}
+                                )
+                            }
+                        }
+                        is DownloadState.Completed -> {
+                            if (forceUpdateInfo?.forceUpdate != true) {
+                                InstallReadyDialog(
+                                    onInstallClick = { updateViewModel.checkAndInstall() },
+                                    onDismiss = {}
+                                )
+                            }
+                        }
+                        else -> {}
                     }
                 }
             }

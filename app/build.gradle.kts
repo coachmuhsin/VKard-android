@@ -12,6 +12,27 @@ if (localPropertiesFile.exists()) {
     localPropertiesFile.inputStream().use { localProperties.load(it) }
 }
 
+val versionProperties = Properties()
+val versionPropertiesFile = rootProject.file("version.properties")
+if (versionPropertiesFile.exists()) {
+    versionPropertiesFile.inputStream().use { versionProperties.load(it) }
+}
+
+val major = versionProperties.getProperty("major")?.toIntOrNull() ?: 1
+val minor = versionProperties.getProperty("minor")?.toIntOrNull() ?: 0
+
+val extVersionCode = if (project.hasProperty("versionCode")) {
+    project.property("versionCode").toString().toInt()
+} else {
+    major * 1000000 + minor * 1000 + 1
+}
+
+val extVersionName = if (project.hasProperty("versionName")) {
+    project.property("versionName").toString()
+} else {
+    "$major.$minor.1"
+}
+
 val supabaseUrl = localProperties.getProperty("SUPABASE_URL") ?: System.getenv("SUPABASE_URL") ?: ""
 val supabaseKey = localProperties.getProperty("SUPABASE_KEY") ?: System.getenv("SUPABASE_KEY") ?: ""
 
@@ -23,8 +44,8 @@ android {
         applicationId = "com.vkard.pro"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = extVersionCode
+        versionName = extVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

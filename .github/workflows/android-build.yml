@@ -33,12 +33,67 @@ jobs:
       - name: Make Gradle Wrapper Executable
         run: chmod +x gradlew
 
-      - name: Detect App Version
+      - name: Calculate App Version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          versionCode=$(grep "versionCode =" app/build.gradle.kts | sed 's/[^0-9]//g')
-          versionName=$(grep "versionName =" app/build.gradle.kts | cut -d '"' -f 2)
-          echo "VERSION_CODE=$versionCode" >> $GITHUB_ENV
-          echo "VERSION_NAME=$versionName" >> $GITHUB_ENV
+          python3 -c "
+          import json, urllib.request, os
+
+          major, minor = 1, 0
+          if os.path.exists('version.properties'):
+              with open('version.properties', 'r') as f:
+                  for line in f:
+                      if line.strip().startswith('major='):
+                          major = int(line.split('=')[1].strip())
+                      elif line.strip().startswith('minor='):
+                          minor = int(line.split('=')[1].strip())
+
+          latest_tag = ''
+          try:
+              req = urllib.request.Request(
+                  'https://api.github.com/repos/coachmuhsin/VKard-android/releases/latest',
+                  headers={'User-Agent': 'Github-Actions-Build'}
+              )
+              token = os.environ.get('GITHUB_TOKEN')
+              if token:
+                  req.add_header('Authorization', f'token {token}')
+              with urllib.request.urlopen(req) as response:
+                  data = json.loads(response.read().decode())
+                  latest_tag = data.get('tag_name', '')
+          except Exception as e:
+              print(f'Error fetching latest release: {e}')
+
+          latest_major = 0
+          latest_minor = 0
+          latest_patch = -1
+
+          if latest_tag.startswith('v'):
+              tag_clean = latest_tag[1:]
+              parts = tag_clean.split('.')
+              if len(parts) == 3:
+                  try:
+                      latest_major = int(parts[0])
+                      latest_minor = int(parts[1])
+                      latest_patch = int(parts[2])
+                  except ValueError:
+                      pass
+
+          if major == latest_major and minor == latest_minor:
+              new_patch = latest_patch + 1
+          else:
+              new_patch = 0
+
+          new_version_name = f'{major}.{minor}.{new_patch}'
+          new_version_code = major * 1000000 + minor * 1000 + new_patch
+
+          print(f'VERSION_NAME: {new_version_name}')
+          print(f'VERSION_CODE: {new_version_code}')
+
+          with open(os.environ['GITHUB_ENV'], 'a') as env_file:
+              env_file.write(f'VERSION_NAME={new_version_name}\n')
+              env_file.write(f'VERSION_CODE={new_version_code}\n')
+          "
         shell: bash
 
       - name: Generate Properties
@@ -60,9 +115,9 @@ jobs:
       - name: Build App
         run: |
           ./gradlew clean --build-cache --parallel --no-daemon
-          ./gradlew assembleDebug --build-cache --parallel --no-daemon
+          ./gradlew assembleDebug -PversionCode=${{ env.VERSION_CODE }} -PversionName=${{ env.VERSION_NAME }} --build-cache --parallel --no-daemon
           if [ "${{ env.HAS_SIGNING }}" = "true" ]; then
-            ./gradlew assembleRelease bundleRelease --build-cache --parallel --no-daemon
+            ./gradlew assembleRelease bundleRelease -PversionCode=${{ env.VERSION_CODE }} -PversionName=${{ env.VERSION_NAME }} --build-cache --parallel --no-daemon
           fi
         shell: bash
 
@@ -70,11 +125,11 @@ jobs:
         run: |
           mkdir -p build_outputs
           if [ -f app/build/outputs/apk/release/app-release.apk ]; then
-            cp app/build/outputs/apk/release/app-release.apk build_outputs/VKARD-PRO.apk
-            cp app/build/outputs/bundle/release/app-release.aab build_outputs/VKARD-PRO.aab
+            cp app/build/outputs/apk/release/app-release.apk build_outputs/VKARD-PRO-v${{ env.VERSION_NAME }}.apk
+            cp app/build/outputs/bundle/release/app-release.aab build_outputs/VKARD-PRO-v${{ env.VERSION_NAME }}.aab
             echo "IS_RELEASE_READY=true" >> $GITHUB_ENV
           else
-            cp app/build/outputs/apk/debug/app-debug.apk build_outputs/VKARD-PRO.apk
+            cp app/build/outputs/apk/debug/app-debug.apk build_outputs/VKARD-PRO-v${{ env.VERSION_NAME }}.apk
             echo "IS_RELEASE_READY=false" >> $GITHUB_ENV
           fi
         shell: bash
@@ -82,8 +137,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ env.VERSION_CODE }}
-          name: VKARD PRO Build ${{ env.VERSION_CODE }}
+          tag_name: v${{ env.VERSION_NAME }}
+          name: VKARD PRO v${{ env.VERSION_NAME }}
           files: build_outputs/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -121,9 +176,9 @@ jobs:
           MIN=$((DURATION / 60))
           SEC=$((DURATION % 60))
           echo "Build Successful"
-          echo "Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ env.VERSION_CODE }}"
-          echo "APK URL: https://github.com/${{ github.repository }}/releases/download/v${{ env.VERSION_CODE }}/VKARD-PRO.apk"
-          echo "AAB URL: https://github.com/${{ github.repository }}/releases/download/v${{ env.VERSION_CODE }}/VKARD-PRO.aab"
+          echo "Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ env.VERSION_NAME }}"
+          echo "APK URL: https://github.com/${{ github.repository }}/releases/download/v${{ env.VERSION_NAME }}/VKARD-PRO-v${{ env.VERSION_NAME }}.apk"
+          echo "AAB URL: https://github.com/${{ github.repository }}/releases/download/v${{ env.VERSION_NAME }}/VKARD-PRO-v${{ env.VERSION_NAME }}.aab"
           echo "Workflow Duration: ${MIN}m ${SEC}s"
-          echo "Permanent Download URL: https://github.com/${{ github.repository }}/releases/latest/download/VKARD-PRO.apk"
+          echo "Permanent Download URL: https://github.com/${{ github.repository }}/releases/latest/download/VKARD-PRO-v${{ env.VERSION_NAME }}.apk"
         shell: bash

@@ -1729,21 +1729,21 @@ fun ProfileOptionsTab(
                 )
                 
                 MetadataRowItem("App Name", "VKARD PRO")
-                MetadataRowItem("Version", BuildConfig.VERSION_NAME)
-                MetadataRowItem("Build", BuildConfig.VERSION_CODE.toString())
+                val installedVer = updateViewModel.getInstalledVersionName()
+                val installedBuild = updateViewModel.getInstalledVersionCode().toString()
+
+                MetadataRowItem("Installed Version", installedVer)
+                MetadataRowItem("Installed Build", installedBuild)
                 MetadataRowItem("Package Name", context.packageName)
                 
                 val info = updateViewModel.latestVersionInfo
                 MetadataRowItem("Release Date", info?.releaseDate ?: "N/A")
                 MetadataRowItem("Last Update Check", updateViewModel.lastCheckedDisplay)
                 
-                val currentVersionCode = BuildConfig.VERSION_CODE
-                val currentVersionName = BuildConfig.VERSION_NAME
-                val hasUpdate = info != null && (info.versionCode > currentVersionCode || 
-                                isUpdateAvailableSemVerLocal(currentVersionName, info.versionName))
+                val latestCode = info?.versionCode?.toLong() ?: 0L
+                val hasUpdate = updateViewModel.getInstalledVersionCode() < latestCode
                 
-                MetadataRowItem("Latest Version", info?.versionName ?: "Up to date")
-                MetadataRowItem("GitHub Release Version", info?.versionName ?: "N/A")
+                MetadataRowItem("Latest GitHub Version", info?.versionName ?: "N/A")
                 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1766,7 +1766,7 @@ fun ProfileOptionsTab(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Update Available",
+                                text = "🔴 Update Available",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.Red,
@@ -1782,7 +1782,7 @@ fun ProfileOptionsTab(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Up to date",
+                                text = "🟢 Up to Date",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = BrandSuccess,
@@ -2674,21 +2674,4 @@ fun CreateAgentDialog(
             }
         }
     )
-}
-
-private fun isUpdateAvailableSemVerLocal(currentVersion: String, latestVersion: String): Boolean {
-    return try {
-        val currentClean = currentVersion.removePrefix("v").trim()
-        val latestClean = latestVersion.removePrefix("v").trim()
-        val currentParts = currentClean.split(".").mapNotNull { it.toIntOrNull() }
-        val latestParts = latestClean.split(".").mapNotNull { it.toIntOrNull() }
-        val minSize = minOf(currentParts.size, latestParts.size)
-        for (i in 0 until minSize) {
-            if (latestParts[i] > currentParts[i]) return true
-            if (latestParts[i] < currentParts[i]) return false
-        }
-        latestParts.size > currentParts.size
-    } catch (e: Exception) {
-        false
-    }
 }

@@ -51,20 +51,38 @@ class UpdateViewModel(
         }
     }
 
+    fun getInstalledVersionCode(): Long = updateManager.getInstalledVersionCode()
+    fun getInstalledVersionName(): String = updateManager.getInstalledVersionName()
+
     fun checkForUpdates(forceRefresh: Boolean = false) {
         viewModelScope.launch {
             isCheckingUpdates = true
             checkError = null
+            
+            val installedCode = getInstalledVersionCode()
+            val installedName = getInstalledVersionName()
+            
             updateRepository.getLatestVersionInfo(forceRefresh)
                 .onSuccess { info ->
                     isCheckingUpdates = false
                     updateLastCheckedDisplay()
-                    val currentVersionCode = BuildConfig.VERSION_CODE
-                    val currentVersionName = BuildConfig.VERSION_NAME
+                    
+                    val latestCode = info.versionCode.toLong()
+                    val latestName = info.versionName
 
-                    val hasUpdate = info.versionCode > currentVersionCode || 
-                                    isUpdateAvailableSemVer(currentVersionName, info.versionName)
-
+                    val hasUpdate = installedCode < latestCode
+                    
+                    // Detailed Log (Task 8)
+                    android.util.Log.d("VKARD_OTA", "Installed versionCode: $installedCode")
+                    android.util.Log.d("VKARD_OTA", "Installed versionName: $installedName")
+                    android.util.Log.d("VKARD_OTA", "GitHub versionCode: $latestCode")
+                    android.util.Log.d("VKARD_OTA", "GitHub versionName: $latestName")
+                    android.util.Log.d("VKARD_OTA", "Comparison result (hasUpdate): $hasUpdate")
+                    
+                    if (!hasUpdate) {
+                        updateRepository.clearCache()
+                    }
+                    
                     latestVersionInfo = info
                     if (hasUpdate) {
                         if (info.forceUpdate) {

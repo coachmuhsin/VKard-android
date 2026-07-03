@@ -104,6 +104,15 @@ class UpdateRepositoryImpl(
         prefs.edit().putInt("dismissed_version_code", versionCode).apply()
     }
 
+    override fun clearCache() {
+        prefs.edit().apply {
+            remove("cached_version_info")
+            remove("last_checked_time")
+            remove("dismissed_version_code")
+            apply()
+        }
+    }
+
     private fun parsePublishedDate(isoString: String): String {
         return try {
             val inputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)

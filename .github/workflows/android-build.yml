@@ -82,8 +82,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.run_number }}
-          name: VKARD PRO Build ${{ github.run_number }}
+          tag_name: v${{ env.VERSION_CODE }}
+          name: VKARD PRO Build ${{ env.VERSION_CODE }}
           files: build_outputs/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -121,9 +121,9 @@ jobs:
           MIN=$((DURATION / 60))
           SEC=$((DURATION % 60))
           echo "Build Successful"
-          echo "Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ github.run_number }}"
-          echo "APK URL: https://github.com/${{ github.repository }}/releases/download/v${{ github.run_number }}/VKARD-PRO.apk"
-          echo "AAB URL: https://github.com/${{ github.repository }}/releases/download/v${{ github.run_number }}/VKARD-PRO.aab"
+          echo "Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ env.VERSION_CODE }}"
+          echo "APK URL: https://github.com/${{ github.repository }}/releases/download/v${{ env.VERSION_CODE }}/VKARD-PRO.apk"
+          echo "AAB URL: https://github.com/${{ github.repository }}/releases/download/v${{ env.VERSION_CODE }}/VKARD-PRO.aab"
           echo "Workflow Duration: ${MIN}m ${SEC}s"
           echo "Permanent Download URL: https://github.com/${{ github.repository }}/releases/latest/download/VKARD-PRO.apk"
         shell: bash

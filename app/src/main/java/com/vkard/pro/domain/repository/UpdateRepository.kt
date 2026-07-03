@@ -8,4 +8,5 @@ interface UpdateRepository {
     fun setLastCheckedTime(timestamp: Long)
     fun isUpdateDismissed(versionCode: Int): Boolean
     fun dismissUpdate(versionCode: Int)
+    fun clearCache()
 }

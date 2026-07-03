@@ -53,8 +53,17 @@ class MainActivity : ComponentActivity() {
                 val coroutineScope = rememberCoroutineScope()
                 val updateViewModel: UpdateViewModel = remember { updateViewModelFactory() }
                 
-                LaunchedEffect(Unit) {
-                    updateViewModel.checkForUpdates(forceRefresh = false)
+                val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+                DisposableEffect(lifecycleOwner) {
+                    val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                        if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                            updateViewModel.checkForUpdates(forceRefresh = true)
+                        }
+                    }
+                    lifecycleOwner.lifecycle.addObserver(observer)
+                    onDispose {
+                        lifecycleOwner.lifecycle.removeObserver(observer)
+                    }
                 }
                 
                 Box(modifier = Modifier.fillMaxSize()) {

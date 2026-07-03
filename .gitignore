@@ -5,6 +5,8 @@ app/build/
 
 # Local configuration files
 local.properties
+.env
+.env.local
 
 # Log files
 *.log
@@ -17,6 +19,7 @@ local.properties
 out/
 
 # Keystore files
+release.keystore
 *.jks
 *.keystore
 

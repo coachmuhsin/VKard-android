@@ -2,6 +2,10 @@ package com.vkard.pro.presentation.dashboard
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.ui.composed
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
@@ -788,59 +792,66 @@ fun VisitingCardsListTab(
         Spacer(modifier = Modifier.height(10.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // + Create VKARD Button
+            Button(
+                onClick = { onCreateCard(null) },
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                contentPadding = PaddingValues(),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+                    .shadow(
+                        elevation = 4.dp,
+                        shape = RoundedCornerShape(16.dp),
+                        ambientColor = BrandPrimary.copy(alpha = 0.4f),
+                        spotColor = BrandPrimary.copy(alpha = 0.4f)
+                    )
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(BrandPrimary, BrandSecondary)
+                            ),
+                            shape = RoundedCornerShape(16.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
+                        Text(
+                            text = "Create VKARD",
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = PoppinsFontFamily
+                        )
+                    }
+                }
+            }
+
+            // Refresh Button (48dp circle, light background, blue icon)
             IconButton(
                 onClick = onRefresh,
                 modifier = Modifier
-                    .background(BrandLightSurface, RoundedCornerShape(12.dp))
-                    .size(40.dp)
+                    .background(BrandLightSurface, androidx.compose.foundation.shape.CircleShape)
+                    .size(48.dp)
+                    .border(1.dp, BrandBorder, androidx.compose.foundation.shape.CircleShape)
             ) {
-                Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = BrandPrimary, modifier = Modifier.size(20.dp))
-            }
-        }
-
-        // + Create VKARD Button
-        Button(
-            onClick = { onCreateCard(null) },
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-            contentPadding = PaddingValues(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp)
-                .shadow(
-                    elevation = 4.dp,
-                    shape = RoundedCornerShape(16.dp),
-                    ambientColor = BrandPrimary.copy(alpha = 0.4f),
-                    spotColor = BrandPrimary.copy(alpha = 0.4f)
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Refresh",
+                    tint = BrandPrimary,
+                    modifier = Modifier.size(24.dp)
                 )
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(BrandPrimary, BrandSecondary)
-                        ),
-                        shape = RoundedCornerShape(16.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
-                    Text(
-                        text = "Create VKARD",
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = PoppinsFontFamily
-                    )
-                }
             }
         }
 
@@ -864,8 +875,8 @@ fun VisitingCardsListTab(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(bottom = 24.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(bottom = 120.dp)
         ) {
             items(filteredCards) { card ->
                 val statusColor = when (card.status.lowercase()) {
@@ -876,22 +887,30 @@ fun VisitingCardsListTab(
 
                 var showMenu by remember { mutableStateOf(false) }
 
-                Card(
+                AnimateCardEnter {
+                    Card(
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .shadow(1.dp, RoundedCornerShape(20.dp), ambientColor = Color(0x0A000000), spotColor = Color(0x0A000000))
+                        .shadow(4.dp, RoundedCornerShape(20.dp), ambientColor = Color(0x0A000000), spotColor = Color(0x0A000000))
                         .border(1.dp, BrandBorder, RoundedCornerShape(20.dp))
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        // Left: Profile photo (Coil loader) aligned perfectly
+                        CardAvatar(logoUrl = card.logo_url, fullName = card.full_name, size = 56.dp)
+
+                        // Middle: Name, Business Details, Expiry, Status
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -917,7 +936,6 @@ fun VisitingCardsListTab(
                                     )
                                 }
                             }
-                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "${card.designation} at ${card.company_name}",
                                 fontSize = 12.sp,
@@ -935,7 +953,7 @@ fun VisitingCardsListTab(
                             }
                         }
 
-                        // Overflow Actions
+                        // Right: Overflow Actions
                         Box {
                             IconButton(onClick = { showMenu = true }) {
                                 Icon(Icons.Default.MoreVert, contentDescription = "Actions", tint = Color(0xFF64748B))
@@ -991,6 +1009,7 @@ fun VisitingCardsListTab(
                         }
                     }
                 }
+                }
             }
 
             if (filteredCards.isEmpty()) {
@@ -1039,61 +1058,70 @@ fun AgentsListTab(
         Spacer(modifier = Modifier.height(10.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (onCreateAgent != null) {
+                // + Create Agent Button
+                Button(
+                    onClick = onCreateAgent,
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    contentPadding = PaddingValues(),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .shadow(
+                            elevation = 4.dp,
+                            shape = RoundedCornerShape(16.dp),
+                            ambientColor = BrandPrimary.copy(alpha = 0.4f),
+                            spotColor = BrandPrimary.copy(alpha = 0.4f)
+                        )
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(BrandPrimary, BrandSecondary)
+                                ),
+                                shape = RoundedCornerShape(16.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
+                            Text(
+                                text = "Create Agent",
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = PoppinsFontFamily
+                            )
+                        }
+                    }
+                }
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
+            }
+
+            // Refresh Button (48dp circle, light background, blue icon)
             IconButton(
                 onClick = onRefresh,
                 modifier = Modifier
-                    .background(BrandLightSurface, RoundedCornerShape(12.dp))
-                    .size(40.dp)
+                    .background(BrandLightSurface, androidx.compose.foundation.shape.CircleShape)
+                    .size(48.dp)
+                    .border(1.dp, BrandBorder, androidx.compose.foundation.shape.CircleShape)
             ) {
-                Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = BrandPrimary, modifier = Modifier.size(20.dp))
-            }
-        }
-
-        // + Create Agent Button
-        if (onCreateAgent != null) {
-            Button(
-                onClick = onCreateAgent,
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                contentPadding = PaddingValues(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
-                    .shadow(
-                        elevation = 4.dp,
-                        shape = RoundedCornerShape(16.dp),
-                        ambientColor = BrandPrimary.copy(alpha = 0.4f),
-                        spotColor = BrandPrimary.copy(alpha = 0.4f)
-                    )
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(BrandPrimary, BrandSecondary)
-                            ),
-                            shape = RoundedCornerShape(16.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
-                        Text(
-                            text = "Create Agent",
-                            color = Color.White,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = PoppinsFontFamily
-                        )
-                    }
-                }
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Refresh",
+                    tint = BrandPrimary,
+                    modifier = Modifier.size(24.dp)
+                )
             }
         }
 
@@ -1128,14 +1156,15 @@ fun AgentsListTab(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
-                contentPadding = PaddingValues(bottom = 24.dp)
+                contentPadding = PaddingValues(bottom = 120.dp)
             ) {
                 items(filteredAgents) { agent ->
                     val totalCards = allCards.count { it.created_by == agent.id }
                     val activeCards = allCards.count { it.created_by == agent.id && it.status.lowercase() == "active" }
                     val isStateActive = agent.status == "active"
 
-                    Card(
+                    AnimateCardEnter {
+                        Card(
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(containerColor = Color.White),
                         modifier = Modifier
@@ -1192,6 +1221,7 @@ fun AgentsListTab(
                             }
                             Text("${agent.credits} Kards", fontWeight = FontWeight.Bold, color = BrandPrimary, fontSize = 15.sp, fontFamily = PoppinsFontFamily)
                         }
+                    }
                     }
                 }
 
@@ -1400,8 +1430,61 @@ fun SupportTab(
             .fillMaxSize()
             .padding(horizontal = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(top = 20.dp, bottom = 24.dp)
+        contentPadding = PaddingValues(top = 20.dp, bottom = 120.dp)
     ) {
+        item {
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = {
+                        description = ""
+                        selectedIssue = "Login Problem"
+                    },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary, contentColor = Color.White),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
+                        Text(
+                            text = "New Ticket",
+                            fontFamily = PoppinsFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                    }
+                }
+
+                // Refresh Button (48dp circle, light background, blue icon)
+                IconButton(
+                    onClick = {
+                        description = ""
+                        selectedIssue = "Login Problem"
+                    },
+                    modifier = Modifier
+                        .background(BrandLightSurface, androidx.compose.foundation.shape.CircleShape)
+                        .size(48.dp)
+                        .border(1.dp, BrandBorder, androidx.compose.foundation.shape.CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Refresh",
+                        tint = BrandPrimary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        }
+
         item {
             Text(
                 text = "Submit a support inquiry. This will launch WhatsApp directly.",
@@ -1830,7 +1913,7 @@ fun ProfileOptionsTab(
             }
         }
         
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(120.dp))
     }
 
     if (showResetPasswordDialog) {
@@ -2057,11 +2140,12 @@ fun FloatingBottomNavigation(
 
     Surface(
         modifier = Modifier
+            .navigationBarsPadding()
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-            .shadow(12.dp, shape = RoundedCornerShape(24.dp)),
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .shadow(16.dp, shape = RoundedCornerShape(28.dp)),
         color = Color.White,
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(28.dp),
         border = BorderStroke(1.dp, BrandPrimary.copy(alpha = 0.15f))
     ) {
         Row(
@@ -2080,15 +2164,23 @@ fun FloatingBottomNavigation(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(16.dp))
                         .clickable { onTabSelected(item.id) }
-                        .padding(vertical = 10.dp, horizontal = 12.dp)
+                        .padding(vertical = 6.dp, horizontal = 10.dp)
                 ) {
                     Icon(
                         imageVector = item.icon,
                         contentDescription = item.label,
                         tint = tintColor,
-                        modifier = Modifier.size(26.dp)
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = item.label,
+                        fontSize = 10.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = tintColor,
+                        fontFamily = PoppinsFontFamily
                     )
                 }
             }
@@ -2277,7 +2369,8 @@ fun SkeletonBoxItem(
     Box(
         modifier = modifier
             .size(width = width, height = height)
-            .background(Color(0xFFF1F5F9), shape)
+            .clip(shape)
+            .shimmerLoadingAnimation()
     )
 }
 
@@ -2290,7 +2383,8 @@ fun SkeletonBoxItem(
     Box(
         modifier = width
             .height(height)
-            .background(Color(0xFFF1F5F9), shape)
+            .clip(shape)
+            .shimmerLoadingAnimation()
     )
 }
 
@@ -2459,21 +2553,7 @@ fun LatestVisitingCardsSection(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.weight(1f)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .background(BrandLightSurface, RoundedCornerShape(10.dp))
-                                    .border(1.dp, BrandBorder, RoundedCornerShape(10.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = card.full_name.firstOrNull()?.toString()?.uppercase() ?: "V",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = BrandPrimary,
-                                    fontFamily = PoppinsFontFamily
-                                )
-                            }
+                            CardAvatar(logoUrl = card.logo_url, fullName = card.full_name, size = 56.dp)
 
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Text(
@@ -2674,4 +2754,122 @@ fun CreateAgentDialog(
             }
         }
     )
+}
+
+fun Modifier.shimmerLoadingAnimation(): Modifier = composed {
+    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "shimmer")
+    val translateAnim by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(durationMillis = 1200, easing = androidx.compose.animation.core.LinearEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Restart
+        ),
+        label = "shimmerTranslate"
+    )
+
+    val shimmerColors = listOf(
+        Color.LightGray.copy(alpha = 0.6f),
+        Color.LightGray.copy(alpha = 0.2f),
+        Color.LightGray.copy(alpha = 0.6f),
+    )
+
+    this.background(
+        brush = Brush.linearGradient(
+            colors = shimmerColors,
+            start = Offset(10f, 10f),
+            end = Offset(translateAnim, translateAnim)
+        )
+    )
+}
+
+@Composable
+fun CardAvatar(
+    logoUrl: String?,
+    fullName: String,
+    size: Dp = 56.dp
+) {
+    if (!logoUrl.isNullOrBlank()) {
+        coil.compose.SubcomposeAsyncImage(
+            model = logoUrl,
+            contentDescription = "Profile Photo",
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            loading = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(BrandLightSurface, androidx.compose.foundation.shape.CircleShape)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp).align(Alignment.Center),
+                        color = BrandPrimary,
+                        strokeWidth = 2.dp
+                    )
+                }
+            },
+            error = {
+                LetterAvatar(fullName = fullName, size = size)
+            },
+            modifier = Modifier
+                .size(size)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .border(1.dp, BrandBorder, androidx.compose.foundation.shape.CircleShape)
+        )
+    } else {
+        LetterAvatar(fullName = fullName, size = size)
+    }
+}
+
+@Composable
+fun LetterAvatar(
+    fullName: String,
+    size: Dp
+) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .background(BrandLightSurface, androidx.compose.foundation.shape.CircleShape)
+            .border(1.dp, BrandBorder, androidx.compose.foundation.shape.CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = fullName.firstOrNull()?.toString()?.uppercase() ?: "V",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = BrandPrimary,
+            fontFamily = PoppinsFontFamily
+        )
+    }
+}
+
+@Composable
+fun AnimateCardEnter(
+    content: @Composable () -> Unit
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        visible = true
+    }
+    
+    val alpha by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 350),
+        label = "alpha"
+    )
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (visible) 1f else 0.95f,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 350),
+        label = "scale"
+    )
+    
+    Box(
+        modifier = Modifier
+            .graphicsLayer(
+                alpha = alpha,
+                scaleX = scale,
+                scaleY = scale
+            )
+    ) {
+        content()
+    }
 }

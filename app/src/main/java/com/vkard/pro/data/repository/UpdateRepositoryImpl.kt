@@ -49,8 +49,7 @@ class UpdateRepositoryImpl(
                 0
             }
 
-            val apkUrl = releaseDto.assets.find { it.name.endsWith(".apk") }?.browser_download_url
-                ?: "https://github.com/coachmuhsin/VKard-android/releases/latest/download/VKARD-PRO.apk"
+            val apkUrl = releaseDto.assets.find { it.name.endsWith(".apk", ignoreCase = true) }?.browser_download_url ?: ""
 
             val bodyText = releaseDto.body ?: ""
             val changesList = bodyText.split("\n", "\r")

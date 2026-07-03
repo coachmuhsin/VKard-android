@@ -1,12 +1,12 @@
 package com.vkard.pro.presentation.update
 
-import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
+import android.util.Log
 import androidx.core.content.FileProvider
 import com.vkard.pro.domain.model.DownloadState
 import kotlinx.coroutines.Dispatchers
@@ -14,18 +14,20 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import java.io.BufferedInputStream
 import java.io.File
+import java.io.FileOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
 
 class UpdateManager(private val context: Context) {
-
-    private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
 
     fun downloadApk(apkUrl: String): Flow<DownloadState> = flow {
         emit(DownloadState.Downloading(0))
 
         val destinationDir = File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-            "VKARD PRO"
+            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
+            "VKARD_PRO"
         )
         if (!destinationDir.exists()) {
             destinationDir.mkdirs()
@@ -36,56 +38,89 @@ class UpdateManager(private val context: Context) {
             destinationFile.delete()
         }
 
+        var connection: HttpURLConnection? = null
         try {
-            val request = DownloadManager.Request(Uri.parse(apkUrl))
-                .setTitle("VKARD PRO Update")
-                .setDescription("Downloading latest VKARD PRO update...")
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "VKARD PRO/VKARD-PRO.apk")
-                .setAllowedOverMetered(true)
-                .setAllowedOverRoaming(true)
+            val url = URL(apkUrl)
+            connection = url.openConnection() as HttpURLConnection
+            connection.connectTimeout = 15000
+            connection.readTimeout = 15000
+            connection.instanceFollowRedirects = true
 
-            val downloadId = downloadManager.enqueue(request)
-            var downloading = true
+            val status = connection.responseCode
+            val contentType = connection.contentType ?: ""
+            val contentLength = connection.contentLengthLong
 
-            while (downloading) {
-                val query = DownloadManager.Query().setFilterById(downloadId)
-                val cursor = downloadManager.query(query)
-                if (cursor != null && cursor.moveToFirst()) {
-                    val statusIdx = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-                    val status = cursor.getInt(statusIdx)
+            // Log required fields (Requirement 7)
+            Log.d("VKARD_OTA_DOWNLOAD", "Download URL: $apkUrl")
+            Log.d("VKARD_OTA_DOWNLOAD", "HTTP status: $status")
+            Log.d("VKARD_OTA_DOWNLOAD", "Content-Type: $contentType")
+            Log.d("VKARD_OTA_DOWNLOAD", "Saved file path: ${destinationFile.absolutePath}")
 
-                    val downloadedIdx = cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
-                    val downloaded = cursor.getInt(downloadedIdx)
+            // Validate response code (Requirement 4)
+            if (status != HttpURLConnection.HTTP_OK) {
+                Log.e("VKARD_OTA_DOWNLOAD", "HTTP Status is not 200: $status. URL: $apkUrl")
+                emit(DownloadState.Failed("HTTP Status $status. URL: $apkUrl"))
+                return@flow
+            }
 
-                    val totalIdx = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
-                    val total = cursor.getInt(totalIdx)
+            // Validate Content-Type (Requirement 4)
+            val isValidContentType = contentType.contains("application/vnd.android.package-archive", ignoreCase = true) ||
+                    contentType.contains("application/octet-stream", ignoreCase = true)
+            
+            if (!isValidContentType || contentType.contains("text/html", ignoreCase = true)) {
+                Log.e("VKARD_OTA_DOWNLOAD", "Invalid Content-Type or HTML response: $contentType. URL: $apkUrl")
+                emit(DownloadState.Failed("Invalid Content-Type: $contentType. URL: $apkUrl"))
+                return@flow
+            }
 
-                    if (total > 0) {
-                        val progress = (downloaded * 100L / total).toInt()
-                        emit(DownloadState.Downloading(progress))
-                    }
+            // Stream down the file
+            val inputStream = BufferedInputStream(connection.inputStream)
+            val outputStream = FileOutputStream(destinationFile)
+            val data = ByteArray(8192)
+            var totalBytesRead = 0L
+            var bytesRead: Int
 
-                    when (status) {
-                        DownloadManager.STATUS_SUCCESSFUL -> {
-                            downloading = false
-                            emit(DownloadState.Completed(destinationFile.absolutePath))
-                        }
-                        DownloadManager.STATUS_FAILED -> {
-                            downloading = false
-                            val reasonIdx = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
-                            val reason = cursor.getInt(reasonIdx)
-                            emit(DownloadState.Failed("Download failed (code: $reason)"))
-                        }
-                    }
-                }
-                cursor?.close()
-                if (downloading) {
-                    delay(500)
+            while (inputStream.read(data).also { bytesRead = it } != -1) {
+                outputStream.write(data, 0, bytesRead)
+                totalBytesRead += bytesRead
+                if (contentLength > 0) {
+                    val progress = ((totalBytesRead * 100L) / contentLength).toInt()
+                    emit(DownloadState.Downloading(progress))
                 }
             }
+            outputStream.flush()
+            outputStream.close()
+            inputStream.close()
+
+            val fileSize = destinationFile.length()
+            Log.d("VKARD_OTA_DOWNLOAD", "Downloaded file size: $fileSize bytes")
+
+            // Post-download validations (Requirement 6)
+            if (!destinationFile.exists()) {
+                Log.e("VKARD_OTA_DOWNLOAD", "Saved file does not exist. URL: $apkUrl")
+                emit(DownloadState.Failed("Downloaded file does not exist. URL: $apkUrl"))
+                return@flow
+            }
+
+            if (fileSize < 5 * 1024 * 1024) { // Under 5 MB
+                Log.e("VKARD_OTA_DOWNLOAD", "File size is under 5 MB: $fileSize bytes. URL: $apkUrl")
+                emit(DownloadState.Failed("Downloaded file is invalid: size is ${fileSize / (1024 * 1024)}MB (expected > 5MB). URL: $apkUrl"))
+                return@flow
+            }
+
+            if (!destinationFile.name.endsWith(".apk", ignoreCase = true)) {
+                Log.e("VKARD_OTA_DOWNLOAD", "File extension is not .apk. URL: $apkUrl")
+                emit(DownloadState.Failed("Downloaded file has invalid extension. URL: $apkUrl"))
+                return@flow
+            }
+
+            emit(DownloadState.Completed(destinationFile.absolutePath))
+
         } catch (e: Exception) {
-            emit(DownloadState.Failed(e.message ?: "Failed to initiate download"))
+            Log.e("VKARD_OTA_DOWNLOAD", "Download exception for URL $apkUrl", e)
+            emit(DownloadState.Failed("Download error: ${e.message}. URL: $apkUrl"))
+        } finally {
+            connection?.disconnect()
         }
     }.flowOn(Dispatchers.IO)
 

@@ -135,6 +135,9 @@ dependencies {
     implementation("io.ktor:ktor-client-core:2.3.11")
     implementation("io.ktor:ktor-client-content-negotiation:2.3.11")
     implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.11")
+ 
+    // OkHttp Client (Audited OTA updates requirement)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // Image loading (Coil)
     implementation("io.coil-kt:coil-compose:2.6.0")

@@ -133,9 +133,10 @@ class UpdateViewModel(
     fun installApk(filePath: String) {
         val info = latestVersionInfo
         if (updateManager.canRequestPackageInstalls()) {
-            val success = updateManager.installApk(filePath)
-            if (!success && info != null) {
-                android.util.Log.e("VKARD_OTA", "Failed to launch package installer for URL: ${info.apk}")
+            val result = updateManager.installApk(filePath)
+            result.onFailure { error ->
+                downloadState = DownloadState.Failed("Installation failed: ${error.message}. URL: ${info?.apk}")
+                android.util.Log.e("VKARD_OTA", "Failed to launch package installer for URL: ${info?.apk}. Reason: ${error.message}")
             }
         }
     }
@@ -144,9 +145,10 @@ class UpdateViewModel(
         val state = downloadState
         val info = latestVersionInfo
         if (state is DownloadState.Completed) {
-            val success = updateManager.installApk(state.localUri)
-            if (!success && info != null) {
-                android.util.Log.e("VKARD_OTA", "Failed to launch package installer for URL: ${info.apk}")
+            val result = updateManager.installApk(state.localUri)
+            result.onFailure { error ->
+                downloadState = DownloadState.Failed("Installation failed: ${error.message}. URL: ${info?.apk}")
+                android.util.Log.e("VKARD_OTA", "Failed to launch package installer for URL: ${info?.apk}. Reason: ${error.message}")
             }
         }
     }

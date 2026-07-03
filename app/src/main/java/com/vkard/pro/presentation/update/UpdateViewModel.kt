@@ -60,21 +60,30 @@ class UpdateViewModel(
                     isCheckingUpdates = false
                     updateLastCheckedDisplay()
                     val currentVersionCode = BuildConfig.VERSION_CODE
-                    if (info.versionCode > currentVersionCode) {
-                        latestVersionInfo = info
+                    val currentVersionName = BuildConfig.VERSION_NAME
+
+                    val hasUpdate = info.versionCode > currentVersionCode || 
+                                    isUpdateAvailableSemVer(currentVersionName, info.versionName)
+
+                    latestVersionInfo = info
+                    if (hasUpdate) {
                         if (info.forceUpdate) {
                             showUpdateBanner = false
                         } else {
                             showUpdateBanner = !updateRepository.isUpdateDismissed(info.versionCode)
                         }
                     } else {
-                        latestVersionInfo = null
                         showUpdateBanner = false
                     }
                 }
                 .onFailure { error ->
                     isCheckingUpdates = false
-                    checkError = error.message ?: "Failed to check updates"
+                    val msg = when (error) {
+                        is java.net.UnknownHostException,
+                        is java.net.ConnectException -> "No Internet Connection"
+                        else -> "Unable to check updates."
+                    }
+                    checkError = msg
                 }
         }
     }
@@ -118,4 +127,21 @@ class UpdateViewModel(
 
     fun getRequestInstallIntent() = updateManager.requestInstallPermissionIntent()
     fun canRequestPackageInstalls() = updateManager.canRequestPackageInstalls()
+
+    private fun isUpdateAvailableSemVer(currentVersion: String, latestVersion: String): Boolean {
+        return try {
+            val currentClean = currentVersion.removePrefix("v").trim()
+            val latestClean = latestVersion.removePrefix("v").trim()
+            val currentParts = currentClean.split(".").mapNotNull { it.toIntOrNull() }
+            val latestParts = latestClean.split(".").mapNotNull { it.toIntOrNull() }
+            val minSize = minOf(currentParts.size, latestParts.size)
+            for (i in 0 until minSize) {
+                if (latestParts[i] > currentParts[i]) return true
+                if (latestParts[i] < currentParts[i]) return false
+            }
+            latestParts.size > currentParts.size
+        } catch (e: Exception) {
+            false
+        }
+    }
 }

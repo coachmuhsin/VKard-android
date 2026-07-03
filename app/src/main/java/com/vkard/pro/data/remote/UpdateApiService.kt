@@ -1,12 +1,28 @@
 package com.vkard.pro.data.remote
 
-import com.vkard.pro.domain.model.VersionInfo
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+
+@Serializable
+data class GitHubReleaseDto(
+    val tag_name: String,
+    val name: String? = null,
+    val published_at: String,
+    val body: String? = null,
+    val assets: List<GitHubAssetDto> = emptyList()
+)
+
+@Serializable
+data class GitHubAssetDto(
+    val name: String,
+    val browser_download_url: String,
+    val size: Long
+)
 
 class UpdateApiService {
     private val client = HttpClient {
@@ -18,7 +34,7 @@ class UpdateApiService {
         }
     }
 
-    suspend fun getLatestVersionInfo(): VersionInfo {
-        return client.get("https://vkard.pro/download/version.json").body()
+    suspend fun getLatestGitHubRelease(): GitHubReleaseDto {
+        return client.get("https://api.github.com/repos/coachmuhsin/VKard-android/releases/latest").body()
     }
 }

@@ -785,19 +785,12 @@ fun VisitingCardsListTab(
             .padding(horizontal = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Visiting Cards",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = BrandText,
-                fontFamily = PoppinsFontFamily
-            )
             IconButton(
                 onClick = onRefresh,
                 modifier = Modifier
@@ -1043,19 +1036,12 @@ fun AgentsListTab(
             .padding(horizontal = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Agents Network",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = BrandText,
-                fontFamily = PoppinsFontFamily
-            )
             IconButton(
                 onClick = onRefresh,
                 modifier = Modifier
@@ -1418,13 +1404,6 @@ fun SupportTab(
     ) {
         item {
             Text(
-                text = "Support Ticket",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = BrandText,
-                fontFamily = PoppinsFontFamily
-            )
-            Text(
                 text = "Submit a support inquiry. This will launch WhatsApp directly.",
                 fontSize = 12.sp,
                 color = Color(0xFF64748B),
@@ -1635,15 +1614,7 @@ fun ProfileOptionsTab(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(20.dp))
-        Text(
-            text = "Profile Settings",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            color = BrandText,
-            fontFamily = PoppinsFontFamily,
-            modifier = Modifier.fillMaxWidth()
-        )
+        Spacer(modifier = Modifier.height(10.dp))
 
         // Glass Profile Details Card
         Card(
@@ -1760,14 +1731,19 @@ fun ProfileOptionsTab(
                 MetadataRowItem("App Name", "VKARD PRO")
                 MetadataRowItem("Version", BuildConfig.VERSION_NAME)
                 MetadataRowItem("Build", BuildConfig.VERSION_CODE.toString())
-                MetadataRowItem("Package", context.packageName)
+                MetadataRowItem("Package Name", context.packageName)
                 
                 val info = updateViewModel.latestVersionInfo
-                if (info != null) {
-                    MetadataRowItem("Release Date", info.releaseDate)
-                }
+                MetadataRowItem("Release Date", info?.releaseDate ?: "N/A")
+                MetadataRowItem("Last Update Check", updateViewModel.lastCheckedDisplay)
                 
-                MetadataRowItem("Last Checked", updateViewModel.lastCheckedDisplay)
+                val currentVersionCode = BuildConfig.VERSION_CODE
+                val currentVersionName = BuildConfig.VERSION_NAME
+                val hasUpdate = info != null && (info.versionCode > currentVersionCode || 
+                                isUpdateAvailableSemVerLocal(currentVersionName, info.versionName))
+                
+                MetadataRowItem("Latest Version", info?.versionName ?: "Up to date")
+                MetadataRowItem("GitHub Release Version", info?.versionName ?: "N/A")
                 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1775,13 +1751,13 @@ fun ProfileOptionsTab(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Update Status",
+                        text = "Current Update Status",
                         fontSize = 13.sp,
                         color = Color(0xFF64748B),
                         fontFamily = PoppinsFontFamily
                     )
                     
-                    if (info != null && info.versionCode > BuildConfig.VERSION_CODE) {
+                    if (hasUpdate) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
@@ -1806,7 +1782,7 @@ fun ProfileOptionsTab(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Latest Version",
+                                text = "Up to date",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = BrandSuccess,
@@ -1816,9 +1792,19 @@ fun ProfileOptionsTab(
                     }
                 }
                 
+                if (updateViewModel.checkError != null) {
+                    Text(
+                        text = updateViewModel.checkError ?: "",
+                        color = Color.Red,
+                        fontSize = 12.sp,
+                        fontFamily = PoppinsFontFamily,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+                
                 Spacer(modifier = Modifier.height(4.dp))
                 
-                if (info != null && info.versionCode > BuildConfig.VERSION_CODE) {
+                if (hasUpdate) {
                     Button(
                         onClick = { updateViewModel.startDownload() },
                         modifier = Modifier.fillMaxWidth(),
@@ -2096,21 +2082,13 @@ fun FloatingBottomNavigation(
                     modifier = Modifier
                         .clip(RoundedCornerShape(12.dp))
                         .clickable { onTabSelected(item.id) }
-                        .padding(vertical = 6.dp, horizontal = 10.dp)
+                        .padding(vertical = 10.dp, horizontal = 12.dp)
                 ) {
                     Icon(
                         imageVector = item.icon,
                         contentDescription = item.label,
                         tint = tintColor,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = item.label,
-                        fontSize = 10.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = tintColor,
-                        fontFamily = PoppinsFontFamily
+                        modifier = Modifier.size(26.dp)
                     )
                 }
             }
@@ -2327,15 +2305,7 @@ fun CustomersManagementTab(
         verticalArrangement = Arrangement.spacedBy(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(20.dp))
-        Text(
-            text = "Client Customers",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            color = BrandText,
-            fontFamily = PoppinsFontFamily,
-            modifier = Modifier.fillMaxWidth()
-        )
+        Spacer(modifier = Modifier.height(10.dp))
 
         Card(
             modifier = Modifier
@@ -2704,4 +2674,21 @@ fun CreateAgentDialog(
             }
         }
     )
+}
+
+private fun isUpdateAvailableSemVerLocal(currentVersion: String, latestVersion: String): Boolean {
+    return try {
+        val currentClean = currentVersion.removePrefix("v").trim()
+        val latestClean = latestVersion.removePrefix("v").trim()
+        val currentParts = currentClean.split(".").mapNotNull { it.toIntOrNull() }
+        val latestParts = latestClean.split(".").mapNotNull { it.toIntOrNull() }
+        val minSize = minOf(currentParts.size, latestParts.size)
+        for (i in 0 until minSize) {
+            if (latestParts[i] > currentParts[i]) return true
+            if (latestParts[i] < currentParts[i]) return false
+        }
+        latestParts.size > currentParts.size
+    } catch (e: Exception) {
+        false
+    }
 }

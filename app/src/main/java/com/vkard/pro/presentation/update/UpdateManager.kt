@@ -24,8 +24,8 @@ class UpdateManager(private val context: Context) {
         emit(DownloadState.Downloading(0))
 
         val destinationDir = File(
-            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
-            "VKARD_PRO"
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+            "VKARD PRO"
         )
         if (!destinationDir.exists()) {
             destinationDir.mkdirs()
@@ -40,8 +40,8 @@ class UpdateManager(private val context: Context) {
             val request = DownloadManager.Request(Uri.parse(apkUrl))
                 .setTitle("VKARD PRO Update")
                 .setDescription("Downloading latest VKARD PRO update...")
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
-                .setDestinationUri(Uri.fromFile(destinationFile))
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "VKARD PRO/VKARD-PRO.apk")
                 .setAllowedOverMetered(true)
                 .setAllowedOverRoaming(true)
 

@@ -47,11 +47,17 @@ fun UpdateBanner(
             .fillMaxWidth()
             .padding(16.dp)
             .shadow(6.dp, RoundedCornerShape(16.dp)),
-        colors = CardDefaults.cardColors(containerColor = BrandError),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         shape = RoundedCornerShape(16.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(Color(0xFFFF416C), Color(0xFFFF4B2B))
+                    )
+                )
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(
@@ -63,14 +69,8 @@ fun UpdateBanner(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.SystemUpdate,
-                        contentDescription = "Update Available",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
                     Text(
-                        text = "New Update Available",
+                        text = "🔴 New VKARD PRO Update Available",
                         color = Color.White,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
@@ -90,9 +90,10 @@ fun UpdateBanner(
             }
 
             Text(
-                text = "Version ${versionInfo.versionName} is ready to install.",
+                text = "Version ${versionInfo.versionName}",
                 color = Color.White.copy(alpha = 0.9f),
                 fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
                 fontFamily = PoppinsFontFamily
             )
 
@@ -101,7 +102,7 @@ fun UpdateBanner(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    versionInfo.changes.take(3).forEach { change ->
+                    versionInfo.changes.take(4).forEach { change ->
                         Text(
                             text = "• $change",
                             color = Color.White.copy(alpha = 0.9f),
@@ -109,6 +110,30 @@ fun UpdateBanner(
                             fontFamily = PoppinsFontFamily
                         )
                     }
+                }
+            } else {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "• Performance Improvements",
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 12.sp,
+                        fontFamily = PoppinsFontFamily
+                    )
+                    Text(
+                        text = "• Bug Fixes",
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 12.sp,
+                        fontFamily = PoppinsFontFamily
+                    )
+                    Text(
+                        text = "• New Features",
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 12.sp,
+                        fontFamily = PoppinsFontFamily
+                    )
                 }
             }
 
@@ -120,7 +145,7 @@ fun UpdateBanner(
             ) {
                 Text(
                     text = "Update Now",
-                    color = BrandError,
+                    color = Color(0xFFFF4B2B),
                     fontWeight = FontWeight.Bold,
                     fontFamily = PoppinsFontFamily
                 )

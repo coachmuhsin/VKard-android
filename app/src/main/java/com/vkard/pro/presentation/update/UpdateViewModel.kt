@@ -1,15 +1,15 @@
 package com.vkard.pro.presentation.update
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.vkard.pro.BuildConfig
-import com.vkard.pro.domain.model.DownloadState
 import com.vkard.pro.domain.model.VersionInfo
 import com.vkard.pro.domain.repository.UpdateRepository
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -21,9 +21,6 @@ class UpdateViewModel(
 ) : ViewModel() {
 
     var latestVersionInfo by mutableStateOf<VersionInfo?>(null)
-        private set
-
-    var downloadState by mutableStateOf<DownloadState>(DownloadState.Idle)
         private set
 
     var showUpdateBanner by mutableStateOf(false)
@@ -54,6 +51,11 @@ class UpdateViewModel(
     fun getInstalledVersionCode(): Long = updateManager.getInstalledVersionCode()
     fun getInstalledVersionName(): String = updateManager.getInstalledVersionName()
 
+    fun isUpdateAvailable(): Boolean {
+        val info = latestVersionInfo ?: return false
+        return getInstalledVersionCode() < info.versionCode
+    }
+
     fun checkForUpdates(forceRefresh: Boolean = false) {
         viewModelScope.launch {
             isCheckingUpdates = true
@@ -72,7 +74,6 @@ class UpdateViewModel(
 
                     val hasUpdate = installedCode < latestCode
                     
-                    // Detailed Log (Task 8)
                     android.util.Log.d("VKARD_OTA", "Installed versionCode: $installedCode")
                     android.util.Log.d("VKARD_OTA", "Installed versionName: $installedName")
                     android.util.Log.d("VKARD_OTA", "GitHub versionCode: $latestCode")
@@ -114,62 +115,16 @@ class UpdateViewModel(
         }
     }
 
-    fun startDownload() {
-        val info = latestVersionInfo ?: return
-        viewModelScope.launch {
-            updateManager.downloadApk(info.apk)
-                .catch { e ->
-                    downloadState = DownloadState.Failed(e.message ?: "Download failed")
-                }
-                .collect { state ->
-                    downloadState = state
-                    if (state is DownloadState.Completed) {
-                        installApk(state.localUri)
-                    }
-                }
-        }
-    }
-
-    fun installApk(filePath: String) {
-        val info = latestVersionInfo
-        if (updateManager.canRequestPackageInstalls()) {
-            val result = updateManager.installApk(filePath)
-            result.onFailure { error ->
-                downloadState = DownloadState.Failed("Installation failed: ${error.message}. URL: ${info?.apk}")
-                android.util.Log.e("VKARD_OTA", "Failed to launch package installer for URL: ${info?.apk}. Reason: ${error.message}")
-            }
-        }
-    }
-
-    fun checkAndInstall() {
-        val state = downloadState
-        val info = latestVersionInfo
-        if (state is DownloadState.Completed) {
-            val result = updateManager.installApk(state.localUri)
-            result.onFailure { error ->
-                downloadState = DownloadState.Failed("Installation failed: ${error.message}. URL: ${info?.apk}")
-                android.util.Log.e("VKARD_OTA", "Failed to launch package installer for URL: ${info?.apk}. Reason: ${error.message}")
-            }
-        }
-    }
-
-    fun getRequestInstallIntent() = updateManager.requestInstallPermissionIntent()
-    fun canRequestPackageInstalls() = updateManager.canRequestPackageInstalls()
-
-    private fun isUpdateAvailableSemVer(currentVersion: String, latestVersion: String): Boolean {
-        return try {
-            val currentClean = currentVersion.removePrefix("v").trim()
-            val latestClean = latestVersion.removePrefix("v").trim()
-            val currentParts = currentClean.split(".").mapNotNull { it.toIntOrNull() }
-            val latestParts = latestClean.split(".").mapNotNull { it.toIntOrNull() }
-            val minSize = minOf(currentParts.size, latestParts.size)
-            for (i in 0 until minSize) {
-                if (latestParts[i] > currentParts[i]) return true
-                if (latestParts[i] < currentParts[i]) return false
-            }
-            latestParts.size > currentParts.size
+    fun openUpdateUrl(context: Context) {
+        val url = "https://www.vkard.pro/download"
+        try {
+            val customTabsIntent = androidx.browser.customtabs.CustomTabsIntent.Builder().build()
+            customTabsIntent.launchUrl(context, Uri.parse(url))
         } catch (e: Exception) {
-            false
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
         }
     }
 }

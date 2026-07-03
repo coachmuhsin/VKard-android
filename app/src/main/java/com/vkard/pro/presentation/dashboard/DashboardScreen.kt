@@ -77,6 +77,7 @@ fun DashboardScreen(
 ) {
     val uiState = viewModel.uiState
     var selectedTab by rememberSaveable { mutableStateOf("home") }
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         viewModel.loadDashboard()
@@ -103,7 +104,7 @@ fun DashboardScreen(
                 com.vkard.pro.presentation.update.UpdateBanner(
                     versionInfo = updateViewModel.latestVersionInfo,
                     onDismiss = { updateViewModel.dismissUpdate() },
-                    onUpdateClick = { updateViewModel.startDownload() }
+                    onUpdateClick = { updateViewModel.openUpdateUrl(context) }
                 )
             }
             Box(
@@ -888,28 +889,24 @@ fun VisitingCardsListTab(
                 var showMenu by remember { mutableStateOf(false) }
 
                 AnimateCardEnter {
-                    Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .shadow(4.dp, RoundedCornerShape(20.dp), ambientColor = Color(0x0A000000), spotColor = Color(0x0A000000))
-                        .border(1.dp, BrandBorder, RoundedCornerShape(20.dp))
-                ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .height(120.dp)
+                            .shadow(2.dp, RoundedCornerShape(18.dp), ambientColor = Color(0x0A000000), spotColor = Color(0x0A000000))
+                            .background(Color.White, RoundedCornerShape(18.dp))
+                            .border(1.dp, BrandBorder, RoundedCornerShape(18.dp))
                             .padding(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        // Left: Profile photo (Coil loader) aligned perfectly
-                        CardAvatar(logoUrl = card.logo_url, fullName = card.full_name, size = 56.dp)
+                        // Left: Profile photo (60dp circular)
+                        CardAvatar(logoUrl = card.logo_url, fullName = card.full_name, size = 60.dp)
 
-                        // Middle: Name, Business Details, Expiry, Status
+                        // Middle: Name, Business Details, Expiry
                         Column(
                             modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            verticalArrangement = Arrangement.Center
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -917,98 +914,126 @@ fun VisitingCardsListTab(
                             ) {
                                 Text(
                                     text = card.full_name,
-                                    fontSize = 16.sp,
+                                    fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = BrandText,
-                                    fontFamily = PoppinsFontFamily
+                                    fontFamily = PoppinsFontFamily,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Box(
                                     modifier = Modifier
-                                        .background(statusColor.copy(alpha = 0.1f), RoundedCornerShape(6.dp))
+                                        .background(statusColor.copy(alpha = 0.12f), RoundedCornerShape(6.dp))
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(
                                         text = card.status.uppercase(),
-                                        fontSize = 9.sp,
+                                        fontSize = 8.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = statusColor,
                                         fontFamily = PoppinsFontFamily
                                     )
                                 }
                             }
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "${card.designation} at ${card.company_name}",
+                                text = card.company_name,
                                 fontSize = 12.sp,
-                                color = Color(0xFF64748B),
-                                fontFamily = PoppinsFontFamily
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF475569),
+                                fontFamily = PoppinsFontFamily,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                            if (card.subscriptions.isNotEmpty()) {
-                                val sub = card.subscriptions.first()
-                                Text(
-                                    text = "Expires: ${sub.end_date.substringBefore("T")}",
-                                    fontSize = 12.sp,
-                                    color = Color(0xFF94A3B8),
-                                    fontFamily = PoppinsFontFamily
-                                )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            val expiryText = if (card.subscriptions.isNotEmpty()) {
+                                "Expires: ${card.subscriptions.first().end_date.substringBefore("T")}"
+                            } else {
+                                "No Subscription"
                             }
+                            Text(
+                                text = expiryText,
+                                fontSize = 11.sp,
+                                color = Color(0xFF94A3B8),
+                                fontFamily = PoppinsFontFamily,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
 
-                        // Right: Overflow Actions
-                        Box {
-                            IconButton(onClick = { showMenu = true }) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "Actions", tint = Color(0xFF64748B))
-                            }
-                            
-                            DropdownMenu(
-                                expanded = showMenu,
-                                onDismissRequest = { showMenu = false },
-                                modifier = Modifier.background(Color.White)
+                        // Right: QR and Edit actions aligned directly on the right
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            IconButton(
+                                onClick = { onShareCard(card.slug) },
+                                modifier = Modifier.size(36.dp)
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text("View Online", fontFamily = PoppinsFontFamily, fontSize = 14.sp) },
-                                    leadingIcon = { Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                                    onClick = {
-                                        showMenu = false
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://vkard.pro/" + card.slug))
-                                        context.startActivity(intent)
-                                    }
+                                Icon(
+                                    imageVector = Icons.Default.QrCode,
+                                    contentDescription = "QR Code",
+                                    tint = BrandPrimary,
+                                    modifier = Modifier.size(20.dp)
                                 )
-                                DropdownMenuItem(
-                                    text = { Text("Edit Card", fontFamily = PoppinsFontFamily, fontSize = 14.sp) },
-                                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                                    onClick = {
-                                        showMenu = false
-                                        onCreateCard(card.slug)
-                                    }
+                            }
+                            IconButton(
+                                onClick = { onCreateCard(card.slug) },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit Card",
+                                    tint = Color(0xFF64748B),
+                                    modifier = Modifier.size(20.dp)
                                 )
-                                DropdownMenuItem(
-                                    text = { Text("QR Code", fontFamily = PoppinsFontFamily, fontSize = 14.sp) },
-                                    leadingIcon = { Icon(Icons.Default.QrCode, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                                    onClick = {
-                                        showMenu = false
-                                        onShareCard(card.slug)
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Copy Link", fontFamily = PoppinsFontFamily, fontSize = 14.sp) },
-                                    leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                                    onClick = {
-                                        showMenu = false
-                                        clipboardManager.setText(AnnotatedString("https://vkard.pro/" + card.slug))
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Delete", color = BrandError, fontFamily = PoppinsFontFamily, fontSize = 14.sp) },
-                                    leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = BrandError, modifier = Modifier.size(18.dp)) },
-                                    onClick = {
-                                        showMenu = false
-                                        onDeleteCard(card.id ?: "")
-                                    }
-                                )
+                            }
+                            Box {
+                                IconButton(
+                                    onClick = { showMenu = true },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.MoreVert,
+                                        contentDescription = "More Options",
+                                        tint = Color(0xFF64748B),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = showMenu,
+                                    onDismissRequest = { showMenu = false },
+                                    modifier = Modifier.background(Color.White)
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("View Online", fontFamily = PoppinsFontFamily, fontSize = 14.sp) },
+                                        leadingIcon = { Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                        onClick = {
+                                            showMenu = false
+                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://vkard.pro/" + card.slug))
+                                            context.startActivity(intent)
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Copy Link", fontFamily = PoppinsFontFamily, fontSize = 14.sp) },
+                                        leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                        onClick = {
+                                            showMenu = false
+                                            clipboardManager.setText(AnnotatedString("https://vkard.pro/" + card.slug))
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Delete", color = BrandError, fontFamily = PoppinsFontFamily, fontSize = 14.sp) },
+                                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = BrandError, modifier = Modifier.size(18.dp)) },
+                                        onClick = {
+                                            showMenu = false
+                                            onDeleteCard(card.id ?: "")
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
-                }
                 }
             }
 
@@ -1688,6 +1713,18 @@ fun ProfileOptionsTab(
     var showLedgerDialog by remember { mutableStateOf(false) }
     var isResettingPassword by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    var showUpToDateToast by remember { mutableStateOf(false) }
+
+    LaunchedEffect(updateViewModel.isCheckingUpdates) {
+        if (!updateViewModel.isCheckingUpdates && updateViewModel.latestVersionInfo != null) {
+            val latestCode = updateViewModel.latestVersionInfo?.versionCode?.toLong() ?: 0L
+            val hasUpdate = updateViewModel.getInstalledVersionCode() < latestCode
+            if (!hasUpdate && showUpToDateToast) {
+                android.widget.Toast.makeText(context, "You're already using the latest version.", android.widget.Toast.LENGTH_SHORT).show()
+                showUpToDateToast = false
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -1889,7 +1926,7 @@ fun ProfileOptionsTab(
                 
                 if (hasUpdate) {
                     Button(
-                        onClick = { updateViewModel.startDownload() },
+                        onClick = { updateViewModel.openUpdateUrl(context) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = BrandError),
                         shape = RoundedCornerShape(12.dp)
@@ -1898,7 +1935,10 @@ fun ProfileOptionsTab(
                     }
                 } else {
                     Button(
-                        onClick = { updateViewModel.checkForUpdates(forceRefresh = true) },
+                        onClick = {
+                            showUpToDateToast = true
+                            updateViewModel.checkForUpdates(forceRefresh = true)
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary),
                         shape = RoundedCornerShape(12.dp)
@@ -2533,103 +2573,99 @@ fun LatestVisitingCardsSection(
                 }
                 val expiryDate = card.subscriptions.firstOrNull()?.end_date?.substringBefore("T") ?: "N/A"
 
-                Card(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .shadow(1.dp, RoundedCornerShape(16.dp), ambientColor = Color(0x05000000), spotColor = Color(0x05000000))
-                        .border(1.dp, BrandBorder, RoundedCornerShape(16.dp)),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    shape = RoundedCornerShape(16.dp)
+                        .height(120.dp)
+                        .shadow(2.dp, RoundedCornerShape(18.dp), ambientColor = Color(0x0A000000), spotColor = Color(0x0A000000))
+                        .background(Color.White, RoundedCornerShape(18.dp))
+                        .border(1.dp, BrandBorder, RoundedCornerShape(18.dp))
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    // Left: Profile photo (60dp circular)
+                    CardAvatar(logoUrl = card.logo_url, fullName = card.full_name, size = 60.dp)
+
+                    // Middle: Name, Business Details, Expiry
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.Center
                     ) {
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            CardAvatar(logoUrl = card.logo_url, fullName = card.full_name, size = 56.dp)
-
-                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = card.full_name,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = BrandText,
+                                fontFamily = PoppinsFontFamily,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .background(statusColor.copy(alpha = 0.12f), RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
                                 Text(
-                                    text = card.full_name,
-                                    fontSize = 14.sp,
+                                    text = card.status.uppercase(),
+                                    fontSize = 8.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = BrandText,
-                                    fontFamily = PoppinsFontFamily,
-                                    maxLines = 1
+                                    color = statusColor,
+                                    fontFamily = PoppinsFontFamily
                                 )
-                                Text(
-                                    text = card.company_name,
-                                    fontSize = 12.sp,
-                                    color = Color(0xFF64748B),
-                                    fontFamily = PoppinsFontFamily,
-                                    maxLines = 1
-                                )
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .background(statusColor.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(
-                                            text = card.status.uppercase(),
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = statusColor,
-                                            fontFamily = PoppinsFontFamily
-                                        )
-                                    }
-                                    
-                                    Text(
-                                        text = "Expires: $expiryDate",
-                                        fontSize = 10.sp,
-                                        color = Color(0xFF94A3B8),
-                                        fontFamily = PoppinsFontFamily
-                                    )
-                                }
                             }
                         }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = card.company_name,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF475569),
+                            fontFamily = PoppinsFontFamily,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Expires: $expiryDate",
+                            fontSize = 11.sp,
+                            color = Color(0xFF94A3B8),
+                            fontFamily = PoppinsFontFamily,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
 
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    // Right: QR and Edit actions aligned directly on the right
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        IconButton(
+                            onClick = { onShareCard(card.slug) },
+                            modifier = Modifier.size(36.dp)
                         ) {
-                            IconButton(
-                                onClick = { onShareCard(card.slug) },
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .background(BrandLightSurface, RoundedCornerShape(8.dp))
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.QrCode,
-                                    contentDescription = "QR Code",
-                                    tint = BrandPrimary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                            
-                            IconButton(
-                                onClick = { onCreateCard(card.slug) },
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .background(BrandLightSurface, RoundedCornerShape(8.dp))
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Edit,
-                                    contentDescription = "Edit Card",
-                                    tint = BrandSecondary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Default.QrCode,
+                                contentDescription = "QR Code",
+                                tint = BrandPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = { onCreateCard(card.slug) },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit Card",
+                                tint = Color(0xFF64748B),
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
                     }
                 }

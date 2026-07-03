@@ -138,6 +138,9 @@ dependencies {
  
     // OkHttp Client (Audited OTA updates requirement)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+ 
+    // AndroidX Browser Custom Tabs
+    implementation("androidx.browser:browser:1.8.0")
 
     // Image loading (Coil)
     implementation("io.coil-kt:coil-compose:2.6.0")

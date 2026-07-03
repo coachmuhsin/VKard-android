@@ -30,9 +30,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import com.vkard.pro.presentation.update.UpdateViewModel
 import com.vkard.pro.presentation.update.ForceUpdateScreen
-import com.vkard.pro.presentation.update.DownloadProgressDialog
-import com.vkard.pro.presentation.update.InstallReadyDialog
-import com.vkard.pro.domain.model.DownloadState
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -282,33 +279,11 @@ class MainActivity : ComponentActivity() {
                 }
                     
                     val forceUpdateInfo = updateViewModel.latestVersionInfo
-                    if (forceUpdateInfo != null && forceUpdateInfo.forceUpdate) {
+                    if (forceUpdateInfo != null && updateViewModel.isUpdateAvailable() && forceUpdateInfo.forceUpdate) {
                         ForceUpdateScreen(
                             versionInfo = forceUpdateInfo,
-                            downloadState = updateViewModel.downloadState,
-                            onUpdateClick = { updateViewModel.startDownload() },
-                            onInstallClick = { updateViewModel.checkAndInstall() }
+                            onUpdateClick = { updateViewModel.openUpdateUrl(this@MainActivity) }
                         )
-                    }
-
-                    when (val state = updateViewModel.downloadState) {
-                        is DownloadState.Downloading -> {
-                            if (forceUpdateInfo?.forceUpdate != true) {
-                                DownloadProgressDialog(
-                                    progress = state.progress,
-                                    onDismiss = {}
-                                )
-                            }
-                        }
-                        is DownloadState.Completed -> {
-                            if (forceUpdateInfo?.forceUpdate != true) {
-                                InstallReadyDialog(
-                                    onInstallClick = { updateViewModel.checkAndInstall() },
-                                    onDismiss = {}
-                                )
-                            }
-                        }
-                        else -> {}
                     }
                 }
             }

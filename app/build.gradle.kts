@@ -59,13 +59,27 @@ android {
 
     signingConfigs {
         create("release") {
-            val storeFilePath = localProperties.getProperty("RELEASE_STORE_FILE")
-            if (!storeFilePath.isNullOrEmpty()) {
-                val storePath = if (storeFilePath.startsWith("../")) storeFilePath.substring(3) else storeFilePath
-                storeFile = rootProject.file(storePath)
-                storePassword = localProperties.getProperty("RELEASE_STORE_PASSWORD")
-                keyAlias = localProperties.getProperty("RELEASE_KEY_ALIAS")
-                keyPassword = localProperties.getProperty("RELEASE_KEY_PASSWORD")
+            val storeFilePath = localProperties.getProperty("RELEASE_STORE_FILE") ?: "release.keystore"
+            val storePath = if (storeFilePath.startsWith("../")) storeFilePath.substring(3) else storeFilePath
+            val keystoreFile = rootProject.file(storePath)
+
+            val isGitHubActions = System.getenv("GITHUB_ACTIONS") != null
+
+            if (isGitHubActions && !keystoreFile.exists()) {
+                throw GradleException("Keystore file ${keystoreFile.absolutePath} is missing in GitHub Actions. Please make sure KEYSTORE_BASE64 is set in GitHub Secrets and decoded correctly.")
+            }
+
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = localProperties.getProperty("RELEASE_STORE_PASSWORD") ?: System.getenv("RELEASE_STORE_PASSWORD") ?: ""
+                keyAlias = localProperties.getProperty("RELEASE_KEY_ALIAS") ?: System.getenv("RELEASE_KEY_ALIAS") ?: ""
+                keyPassword = localProperties.getProperty("RELEASE_KEY_PASSWORD") ?: System.getenv("RELEASE_KEY_PASSWORD") ?: ""
+            } else {
+                // Fallback dummy properties for local project sync validation so local developers can compile assembleDebug
+                storeFile = rootProject.file("release.keystore")
+                storePassword = "dummy_password"
+                keyAlias = "dummy_alias"
+                keyPassword = "dummy_password"
             }
         }
     }

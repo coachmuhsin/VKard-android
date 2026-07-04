@@ -908,7 +908,7 @@ fun VisitingCardsListTab(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = 120.dp)
         ) {
             items(filteredCards) { card ->
@@ -921,14 +921,13 @@ fun VisitingCardsListTab(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://vkard.pro/" + card.slug))
-                                context.startActivity(intent)
+                                activeBottomSheetCard = card
                             }
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp),
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
@@ -938,7 +937,7 @@ fun VisitingCardsListTab(
                             // Middle: Information block
                             Column(
                                 modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 // Name
                                 Text(
@@ -1018,23 +1017,6 @@ fun VisitingCardsListTab(
                                     fontFamily = PoppinsFontFamily
                                 )
                             }
-
-                            // Right: More Options Button (⋮) on the top-right alignment
-                            Box(
-                                modifier = Modifier.align(Alignment.Top)
-                            ) {
-                                IconButton(
-                                    onClick = { activeBottomSheetCard = card },
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.MoreVert,
-                                        contentDescription = "More Options",
-                                        tint = Color(0xFF64748B),
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                            }
                         }
                     }
                 }
@@ -1112,22 +1094,6 @@ fun VisitingCardsListTab(
                             putExtra(Intent.EXTRA_TEXT, "https://vkard.pro/${card.slug}")
                         }
                         context.startActivity(Intent.createChooser(shareIntent, "Share Card Link"))
-                    }
-                )
-                BottomSheetItem(
-                    icon = Icons.Default.ContentCopy,
-                    label = "Duplicate Card",
-                    onClick = {
-                        activeBottomSheetCard = null
-                        android.widget.Toast.makeText(context, "Duplicate Card functionality coming soon!", android.widget.Toast.LENGTH_SHORT).show()
-                    }
-                )
-                BottomSheetItem(
-                    icon = Icons.Default.Autorenew,
-                    label = "Renew Card",
-                    onClick = {
-                        activeBottomSheetCard = null
-                        android.widget.Toast.makeText(context, "Renew Card functionality coming soon!", android.widget.Toast.LENGTH_SHORT).show()
                     }
                 )
                 HorizontalDivider(color = BrandBorder)

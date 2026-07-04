@@ -51,12 +51,21 @@ jobs:
                   req.add_header('Authorization', f'token {token}')
               with urllib.request.urlopen(req) as response:
                   data = json.loads(response.read().decode())
-                  latest_tag = data.get('tag_name', '')
-                  # tag name can be v5 or just 5
-                  if latest_tag.startswith('v'):
-                      latest_code = int(latest_tag[1:].strip())
-                  elif latest_tag.isdigit():
-                      latest_code = int(latest_tag)
+                  latest_tag = data.get('tag_name', '').strip()
+                  tag_clean = latest_tag.lstrip('v').strip()
+                  if tag_clean:
+                      if tag_clean.isdigit():
+                          latest_code = int(tag_clean)
+                      else:
+                          parts = tag_clean.split('.')
+                          code = 0
+                          if len(parts) >= 1 and parts[0].isdigit():
+                              code += int(parts[0]) * 1000000
+                          if len(parts) >= 2 and parts[1].isdigit():
+                              code += int(parts[1]) * 1000
+                          if len(parts) >= 3 and parts[2].isdigit():
+                              code += int(parts[2])
+                          latest_code = code
           except Exception as e:
               print(f'Error fetching latest release: {e}')
  

@@ -792,6 +792,7 @@ fun QuickActionGridCard(action: QuickActionItem, modifier: Modifier = Modifier) 
 // Tab Content Pages
 // ----------------------------------------------------
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun VisitingCardsListTab(
     cards: List<DigitalCardWithSub>,
@@ -803,6 +804,7 @@ fun VisitingCardsListTab(
     var searchQuery by remember { mutableStateOf("") }
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
+    var activeBottomSheetCard by remember { mutableStateOf<DigitalCardWithSub?>(null) }
 
     val filteredCards = remember(searchQuery, cards) {
         if (searchQuery.isBlank()) cards else {
@@ -910,165 +912,126 @@ fun VisitingCardsListTab(
             contentPadding = PaddingValues(bottom = 120.dp)
         ) {
             items(filteredCards) { card ->
-                val statusColor = when (card.status.lowercase()) {
-                    "active" -> BrandSuccess
-                    "draft", "inactive" -> BrandWarning
-                    else -> BrandError
-                }
-
-                var showMenu by remember { mutableStateOf(false) }
-
                 AnimateCardEnter {
-                    Row(
+                    Card(
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        border = BorderStroke(1.dp, BrandBorder),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(120.dp)
-                            .shadow(2.dp, RoundedCornerShape(18.dp), ambientColor = Color(0x0A000000), spotColor = Color(0x0A000000))
-                            .background(Color.White, RoundedCornerShape(18.dp))
-                            .border(1.dp, BrandBorder, RoundedCornerShape(18.dp))
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            .clickable {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://vkard.pro/" + card.slug))
+                                context.startActivity(intent)
+                            }
                     ) {
-                        // Left: Profile photo (56dp circular)
-                        CardAvatar(logoUrl = card.logo_url, fullName = card.full_name, size = 56.dp)
-
-                        // Middle: Name, Business Details, Expiry
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.Center
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            // Left: Avatar (72dp fixed size)
+                            CardAvatar(logoUrl = card.logo_url, fullName = card.full_name, size = 72.dp)
+
+                            // Middle: Information block
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
+                                // Name
                                 Text(
                                     text = card.full_name,
-                                    fontSize = 15.sp,
+                                    fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = BrandText,
                                     fontFamily = PoppinsFontFamily,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f, fill = false)
+                                    maxLines = 2
                                 )
-                                Box(
+
+                                // Designation
+                                if (!card.designation.isNullOrBlank()) {
+                                    Text(
+                                        text = card.designation,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        color = Color(0xFF475569),
+                                        fontFamily = PoppinsFontFamily,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                // Company Name
+                                if (!card.company_name.isNullOrBlank()) {
+                                    Text(
+                                        text = card.company_name,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        color = Color(0xFF64748B),
+                                        fontFamily = PoppinsFontFamily,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                // Status Badge (Green/Yellow/Red rounded chip)
+                                val (badgeBg, badgeText, dotColor) = when (card.status.lowercase()) {
+                                    "active" -> Triple(Color(0xFFF0FDF4), Color(0xFF15803D), Color(0xFF22C55E))
+                                    "draft", "inactive" -> Triple(Color(0xFFFEF3C7), Color(0xFFB45309), Color(0xFFF59E0B))
+                                    else -> Triple(Color(0xFFFEF2F2), Color(0xFFB91C1C), Color(0xFFEF4444))
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                                     modifier = Modifier
-                                        .background(statusColor.copy(alpha = 0.12f), RoundedCornerShape(6.dp))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        .background(badgeBg, RoundedCornerShape(12.dp))
+                                        .border(BorderStroke(1.dp, badgeText.copy(alpha = 0.2f)), RoundedCornerShape(12.dp))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp)
                                 ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .background(dotColor, androidx.compose.foundation.shape.CircleShape)
+                                    )
                                     Text(
                                         text = card.status.uppercase(),
-                                        fontSize = 8.sp,
+                                        fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = statusColor,
+                                        color = badgeText,
                                         fontFamily = PoppinsFontFamily
                                     )
                                 }
-                            }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            
-                            val bizDesignation = when {
-                                !card.company_name.isNullOrBlank() && !card.designation.isNullOrBlank() -> "${card.company_name} / ${card.designation}"
-                                !card.company_name.isNullOrBlank() -> card.company_name
-                                !card.designation.isNullOrBlank() -> card.designation
-                                else -> "No Business/Designation"
-                            }
-                            
-                            Text(
-                                text = bizDesignation,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFF475569),
-                                fontFamily = PoppinsFontFamily,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            val expiryText = if (card.subscriptions.isNotEmpty()) {
-                                "Expires: ${card.subscriptions.first().end_date.substringBefore("T")}"
-                            } else {
-                                "No Subscription"
-                            }
-                            Text(
-                                text = expiryText,
-                                fontSize = 11.sp,
-                                color = Color(0xFF94A3B8),
-                                fontFamily = PoppinsFontFamily,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
 
-                        // Right: QR and Edit actions aligned directly on the right
-                        Row(
-                            modifier = Modifier.width(116.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            IconButton(
-                                onClick = { onShareCard(card.slug) },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.QrCode,
-                                    contentDescription = "QR Code",
-                                    tint = BrandPrimary,
-                                    modifier = Modifier.size(20.dp)
+                                // Expiry Date
+                                val expiryText = if (card.subscriptions.isNotEmpty()) {
+                                    "Expires: ${card.subscriptions.first().end_date.substringBefore("T")}"
+                                } else {
+                                    "No Subscription"
+                                }
+                                Text(
+                                    text = expiryText,
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF94A3B8),
+                                    fontFamily = PoppinsFontFamily
                                 )
                             }
-                            IconButton(
-                                onClick = { onCreateCard(card.slug) },
-                                modifier = Modifier.size(36.dp)
+
+                            // Right: More Options Button (⋮) on the top-right alignment
+                            Box(
+                                modifier = Modifier.align(Alignment.Top)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Edit,
-                                    contentDescription = "Edit Card",
-                                    tint = Color(0xFF64748B),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Box {
                                 IconButton(
-                                    onClick = { showMenu = true },
-                                    modifier = Modifier.size(32.dp)
+                                    onClick = { activeBottomSheetCard = card },
+                                    modifier = Modifier.size(36.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.MoreVert,
                                         contentDescription = "More Options",
                                         tint = Color(0xFF64748B),
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                                DropdownMenu(
-                                    expanded = showMenu,
-                                    onDismissRequest = { showMenu = false },
-                                    modifier = Modifier.background(Color.White)
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text("View Online", fontFamily = PoppinsFontFamily, fontSize = 14.sp) },
-                                        leadingIcon = { Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                                        onClick = {
-                                            showMenu = false
-                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://vkard.pro/" + card.slug))
-                                            context.startActivity(intent)
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Copy Link", fontFamily = PoppinsFontFamily, fontSize = 14.sp) },
-                                        leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                                        onClick = {
-                                            showMenu = false
-                                            clipboardManager.setText(AnnotatedString("https://vkard.pro/" + card.slug))
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Delete", color = BrandError, fontFamily = PoppinsFontFamily, fontSize = 14.sp) },
-                                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = BrandError, modifier = Modifier.size(18.dp)) },
-                                        onClick = {
-                                            showMenu = false
-                                            onDeleteCard(card.id ?: "")
-                                        }
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 }
                             }
@@ -1090,6 +1053,128 @@ fun VisitingCardsListTab(
                 }
             }
         }
+    }
+
+    if (activeBottomSheetCard != null) {
+        val card = activeBottomSheetCard!!
+        ModalBottomSheet(
+            onDismissRequest = { activeBottomSheetCard = null },
+            containerColor = Color.White
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .navigationBarsPadding(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = card.full_name,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    fontFamily = PoppinsFontFamily,
+                    color = BrandText,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                BottomSheetItem(
+                    icon = Icons.Default.Language,
+                    label = "Open Card",
+                    onClick = {
+                        activeBottomSheetCard = null
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://vkard.pro/" + card.slug))
+                        context.startActivity(intent)
+                    }
+                )
+                BottomSheetItem(
+                    icon = Icons.Default.QrCode,
+                    label = "Show QR Code",
+                    onClick = {
+                        activeBottomSheetCard = null
+                        onShareCard(card.slug)
+                    }
+                )
+                BottomSheetItem(
+                    icon = Icons.Default.Edit,
+                    label = "Edit Card",
+                    onClick = {
+                        activeBottomSheetCard = null
+                        onCreateCard(card.slug)
+                    }
+                )
+                BottomSheetItem(
+                    icon = Icons.Default.Share,
+                    label = "Share Card",
+                    onClick = {
+                        activeBottomSheetCard = null
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, "https://vkard.pro/${card.slug}")
+                        }
+                        context.startActivity(Intent.createChooser(shareIntent, "Share Card Link"))
+                    }
+                )
+                BottomSheetItem(
+                    icon = Icons.Default.ContentCopy,
+                    label = "Duplicate Card",
+                    onClick = {
+                        activeBottomSheetCard = null
+                        android.widget.Toast.makeText(context, "Duplicate Card functionality coming soon!", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                )
+                BottomSheetItem(
+                    icon = Icons.Default.Autorenew,
+                    label = "Renew Card",
+                    onClick = {
+                        activeBottomSheetCard = null
+                        android.widget.Toast.makeText(context, "Renew Card functionality coming soon!", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                )
+                HorizontalDivider(color = BrandBorder)
+                BottomSheetItem(
+                    icon = Icons.Default.Delete,
+                    label = "Delete Card",
+                    iconColor = BrandError,
+                    labelColor = BrandError,
+                    onClick = {
+                        activeBottomSheetCard = null
+                        onDeleteCard(card.id ?: "")
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun BottomSheetItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    iconColor: Color = Color(0xFF64748B),
+    labelColor: Color = BrandText,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp, horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = iconColor,
+            modifier = Modifier.size(22.dp)
+        )
+        Text(
+            text = label,
+            fontSize = 15.sp,
+            color = labelColor,
+            fontFamily = PoppinsFontFamily,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 
@@ -1889,14 +1974,15 @@ fun ProfileOptionsTab(
                     fontFamily = PoppinsFontFamily
                 )
                 
-                val installedVer = updateViewModel.getInstalledVersionName()
-                val installedBuild = updateViewModel.getInstalledVersionCode().toString()
+                val installedCode = updateViewModel.getInstalledVersionCode()
+                val installedVer = "Release $installedCode"
                 val info = updateViewModel.latestVersionInfo
-                val latestCode = info?.versionCode?.toLong() ?: 0L
-                val hasUpdate = updateViewModel.getInstalledVersionCode() < latestCode
+                val latestCode = info?.versionCode?.toLong() ?: installedCode
+                val hasUpdate = installedCode < latestCode
+                val latestVer = if (info != null) "Release ${info.versionCode}" else "N/A"
 
                 MetadataRowItem("Installed Release", installedVer)
-                MetadataRowItem("Latest GitHub Release", info?.versionName ?: "N/A")
+                MetadataRowItem("Latest GitHub Release", latestVer)
                 MetadataRowItem("Published Date", info?.releaseDate ?: "N/A")
                 MetadataRowItem("Last Checked", updateViewModel.lastCheckedDisplay)
                 
@@ -2025,7 +2111,7 @@ fun ProfileOptionsTab(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             DebugInfoRow("Installed Release Name", installedVer)
-                            DebugInfoRow("Installed Release Code", installedBuild)
+                            DebugInfoRow("Installed Release Code", installedCode.toString())
                             DebugInfoRow("Latest GitHub Release Name", info?.versionName ?: "N/A")
                             DebugInfoRow("Latest GitHub Release Code", info?.versionCode?.toString() ?: "N/A")
                             DebugInfoRow("GitHub Tag Name", info?.tagName ?: "N/A")
@@ -3031,9 +3117,12 @@ fun AppStatusCard(
 ) {
     val context = LocalContext.current
     val isUpdateAvailable = updateViewModel.isUpdateAvailable()
-    val installedVersion = updateViewModel.getInstalledVersionName()
+    val installedCode = updateViewModel.getInstalledVersionCode()
     val info = updateViewModel.latestVersionInfo
-    val latestVersionName = info?.versionName ?: installedVersion
+    val latestCode = info?.versionCode?.toLong() ?: installedCode
+
+    val installedVersion = "Release $installedCode"
+    val latestVersionName = "Release $latestCode"
     val downloadState = updateViewModel.downloadState
 
     val infiniteTransition = rememberInfiniteTransition(label = "blinking")

@@ -20,17 +20,7 @@ class UpdateRepositoryImpl(
 
     override suspend fun getLatestVersionInfo(forceRefresh: Boolean): Result<VersionInfo> {
         val now = System.currentTimeMillis()
-        val lastChecked = prefs.getLong("last_checked_time", 0L)
         val cachedJson = prefs.getString("cached_version_info", null)
-
-        if (!forceRefresh && (now - lastChecked) < 600000L && cachedJson != null) {
-            val cachedInfoResult = runCatching {
-                Json.decodeFromString<VersionInfo>(cachedJson)
-            }
-            if (cachedInfoResult.isSuccess) {
-                return cachedInfoResult
-            }
-        }
 
         val networkResult = runCatching {
             val releaseDto = apiService.getLatestGitHubRelease()

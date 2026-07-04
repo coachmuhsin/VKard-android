@@ -9,5 +9,9 @@ data class VersionInfo(
     val releaseDate: String,
     val apk: String,
     val forceUpdate: Boolean,
-    val changes: List<String>
+    val changes: List<String>,
+    val tagName: String = "",
+    val releaseName: String = "",
+    val publishedAtRaw: String = "",
+    val apkAssetName: String = ""
 )

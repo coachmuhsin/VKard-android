@@ -1714,6 +1714,7 @@ fun ProfileOptionsTab(
     var isResettingPassword by remember { mutableStateOf(false) }
     val context = LocalContext.current
     var showUpToDateToast by remember { mutableStateOf(false) }
+    var showDebugSection by remember { mutableStateOf(false) }
 
     LaunchedEffect(updateViewModel.isCheckingUpdates) {
         if (!updateViewModel.isCheckingUpdates && updateViewModel.latestVersionInfo != null) {
@@ -1947,6 +1948,58 @@ fun ProfileOptionsTab(
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
                         } else {
                             Text("Check for Updates", color = Color.White, fontWeight = FontWeight.Bold, fontFamily = PoppinsFontFamily)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Toggle Button/Row for Debug Section
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showDebugSection = !showDebugSection }
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Update Debug Info",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF64748B),
+                        fontFamily = PoppinsFontFamily
+                    )
+                    Icon(
+                        imageVector = if (showDebugSection) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = "Toggle Debug Info",
+                        tint = Color(0xFF64748B)
+                    )
+                }
+
+                if (showDebugSection) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            DebugInfoRow("Installed Version Name", installedVer)
+                            DebugInfoRow("Installed Version Code", installedBuild)
+                            DebugInfoRow("Latest GitHub Version Name", info?.versionName ?: "N/A")
+                            DebugInfoRow("Latest GitHub Version Code", info?.versionCode?.toString() ?: "N/A")
+                            DebugInfoRow("GitHub Tag Name", info?.tagName ?: "N/A")
+                            DebugInfoRow("Release Name", info?.releaseName ?: "N/A")
+                            DebugInfoRow("Published Date", info?.releaseDate ?: "N/A")
+                            DebugInfoRow("APK Asset Name", info?.apkAssetName ?: "N/A")
+                            DebugInfoRow("APK Download URL", info?.apk ?: "N/A")
+                            DebugInfoRow("Comparison Result", if (hasUpdate) "Update Available" else "Up To Date")
                         }
                     }
                 }
@@ -2907,5 +2960,32 @@ fun AnimateCardEnter(
             )
     ) {
         content()
+    }
+}
+
+@Composable
+fun DebugInfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color(0xFF64748B),
+            fontFamily = PoppinsFontFamily,
+            modifier = Modifier.weight(0.4f)
+        )
+        Text(
+            text = value,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Normal,
+            color = Color(0xFF0F172A),
+            fontFamily = PoppinsFontFamily,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(0.6f)
+        )
     }
 }

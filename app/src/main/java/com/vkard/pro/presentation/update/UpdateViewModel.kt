@@ -73,12 +73,33 @@ class UpdateViewModel(
                     val latestName = info.versionName
 
                     val hasUpdate = installedCode < latestCode
+                    val resultString = if (hasUpdate) "Update Available" else "Up To Date"
                     
-                    android.util.Log.d("VKARD_OTA", "Installed versionCode: $installedCode")
-                    android.util.Log.d("VKARD_OTA", "Installed versionName: $installedName")
-                    android.util.Log.d("VKARD_OTA", "GitHub versionCode: $latestCode")
-                    android.util.Log.d("VKARD_OTA", "GitHub versionName: $latestName")
-                    android.util.Log.d("VKARD_OTA", "Comparison result (hasUpdate): $hasUpdate")
+                    // Detailed log output of individual fields
+                    android.util.Log.d("VKARD_OTA", "Installed Version Name: $installedName")
+                    android.util.Log.d("VKARD_OTA", "Installed Version Code: $installedCode")
+                    android.util.Log.d("VKARD_OTA", "Latest GitHub Version Name: $latestName")
+                    android.util.Log.d("VKARD_OTA", "Latest GitHub Version Code: $latestCode")
+                    android.util.Log.d("VKARD_OTA", "GitHub Tag Name: ${info.tagName}")
+                    android.util.Log.d("VKARD_OTA", "Release Name: ${info.releaseName}")
+                    android.util.Log.d("VKARD_OTA", "Published Date: ${info.releaseDate}")
+                    android.util.Log.d("VKARD_OTA", "APK Asset Name: ${info.apkAssetName}")
+                    android.util.Log.d("VKARD_OTA", "APK Download URL: ${info.apk}")
+                    android.util.Log.d("VKARD_OTA", "Comparison Result: $resultString")
+                    
+                    // Exact format requested
+                    android.util.Log.d("VKARD_OTA", """
+                        Installed Version:
+                        $installedName
+                        $installedCode
+
+                        GitHub Version:
+                        $latestName
+                        $latestCode
+
+                        Result:
+                        $resultString
+                    """.trimIndent())
                     
                     if (!hasUpdate) {
                         updateRepository.clearCache()

@@ -20,16 +20,9 @@ class UpdateRepositoryImpl(
 
     override suspend fun getLatestVersionInfo(forceRefresh: Boolean): Result<VersionInfo> {
         val now = System.currentTimeMillis()
-        val lastChecked = getLastCheckedTime()
         val cachedJson = prefs.getString("cached_version_info", null)
 
-        if (!forceRefresh && cachedJson != null && (now - lastChecked < 6 * 60 * 60 * 1000)) {
-            return runCatching {
-                Json.decodeFromString<VersionInfo>(cachedJson)
-            }
-        }
-
-        return runCatching {
+        val networkResult = runCatching {
             val releaseDto = apiService.getLatestGitHubRelease()
             val tagClean = releaseDto.tag_name.removePrefix("v").trim()
             
@@ -49,7 +42,9 @@ class UpdateRepositoryImpl(
                 0
             }
 
-            val apkUrl = releaseDto.assets.find { it.name.endsWith(".apk", ignoreCase = true) }?.browser_download_url ?: ""
+            val apkAsset = releaseDto.assets.find { it.name.endsWith(".apk", ignoreCase = true) }
+            val apkUrl = apkAsset?.browser_download_url ?: ""
+            val apkName = apkAsset?.name ?: "N/A"
 
             val bodyText = releaseDto.body ?: ""
             val changesList = bodyText.split("\n", "\r")
@@ -75,7 +70,11 @@ class UpdateRepositoryImpl(
                 releaseDate = prettyDate,
                 apk = apkUrl,
                 forceUpdate = isForce,
-                changes = changesList
+                changes = changesList,
+                tagName = releaseDto.tag_name,
+                releaseName = releaseDto.name ?: "N/A",
+                publishedAtRaw = releaseDto.published_at,
+                apkAssetName = apkName
             )
 
             prefs.edit().apply {
@@ -84,6 +83,20 @@ class UpdateRepositoryImpl(
                 apply()
             }
             info
+        }
+
+        if (networkResult.isSuccess) {
+            return networkResult
+        } else {
+            if (cachedJson != null) {
+                val cachedInfoResult = runCatching {
+                    Json.decodeFromString<VersionInfo>(cachedJson)
+                }
+                if (cachedInfoResult.isSuccess) {
+                    return cachedInfoResult
+                }
+            }
+            return networkResult
         }
     }
 

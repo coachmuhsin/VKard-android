@@ -97,7 +97,7 @@ jobs:
           fi
         shell: bash
 
-       - name: Package Outputs
+      - name: Package Outputs
         run: |
           mkdir -p build_outputs
           if [ -f app/build/outputs/apk/release/app-release.apk ]; then

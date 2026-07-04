@@ -65,6 +65,12 @@ android {
                 storePassword = localProperties.getProperty("RELEASE_STORE_PASSWORD")
                 keyAlias = localProperties.getProperty("RELEASE_KEY_ALIAS")
                 keyPassword = localProperties.getProperty("RELEASE_KEY_PASSWORD")
+            } else {
+                val debugConfig = getByName("debug")
+                storeFile = debugConfig.storeFile
+                storePassword = debugConfig.storePassword
+                keyAlias = debugConfig.keyAlias
+                keyPassword = debugConfig.keyPassword
             }
         }
     }
@@ -76,11 +82,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Apply release signing config if available
-            val storeFilePath = localProperties.getProperty("RELEASE_STORE_FILE")
-            if (!storeFilePath.isNullOrEmpty()) {
-                signingConfig = signingConfigs.getByName("release")
-            }
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {

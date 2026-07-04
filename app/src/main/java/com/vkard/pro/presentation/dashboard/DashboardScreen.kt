@@ -99,6 +99,7 @@ fun DashboardScreen(
                     ) {
                         updateViewModel.verifyAndInstallApk(context)
                     }
+                    updateViewModel.checkForUpdates(forceRefresh = true)
                 }
             }
         }
@@ -3031,6 +3032,8 @@ fun AppStatusCard(
     val context = LocalContext.current
     val isUpdateAvailable = updateViewModel.isUpdateAvailable()
     val installedVersion = updateViewModel.getInstalledVersionName()
+    val info = updateViewModel.latestVersionInfo
+    val latestVersionName = info?.versionName ?: installedVersion
     val downloadState = updateViewModel.downloadState
 
     val infiniteTransition = rememberInfiniteTransition(label = "blinking")
@@ -3076,15 +3079,84 @@ fun AppStatusCard(
         border = BorderStroke(1.dp, BrandBorder),
         modifier = modifier
             .fillMaxWidth()
-            .height(80.dp)
             .shadow(1.dp, RoundedCornerShape(16.dp), ambientColor = Color(0x05000000), spotColor = Color(0x05000000))
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            contentAlignment = Alignment.CenterStart
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "VKARD PRO",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = BrandText,
+                    fontFamily = PoppinsFontFamily
+                )
+                
+                if (downloadState == com.vkard.pro.presentation.update.DownloadState.DOWNLOADING ||
+                    downloadState == com.vkard.pro.presentation.update.DownloadState.INSTALLING
+                ) {
+                    // Spacing or empty
+                } else {
+                    if (isUpdateAvailable) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier
+                                .background(Color(0xFFFEF2F2), RoundedCornerShape(8.dp))
+                                .border(BorderStroke(1.dp, Color(0xFFFCA5A5)), RoundedCornerShape(8.dp))
+                                .clickable {
+                                    updateViewModel.startDownload(context)
+                                }
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .background(Color(0xFFEF4444), androidx.compose.foundation.shape.CircleShape)
+                            )
+                            Text(
+                                text = "Update Available",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFEF4444),
+                                fontFamily = PoppinsFontFamily
+                            )
+                        }
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier
+                                .background(Color(0xFFF0FDF4), RoundedCornerShape(8.dp))
+                                .border(BorderStroke(1.dp, Color(0xFF86EFAC)), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .graphicsLayer { alpha = dotAlpha }
+                                    .background(Color(0xFF22C55E), androidx.compose.foundation.shape.CircleShape)
+                            )
+                            Text(
+                                text = "Up To Date",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF22C55E),
+                                fontFamily = PoppinsFontFamily
+                            )
+                        }
+                    }
+                }
+            }
+            
             when (downloadState) {
                 com.vkard.pro.presentation.update.DownloadState.DOWNLOADING -> {
                     Row(
@@ -3144,26 +3216,21 @@ fun AppStatusCard(
                 com.vkard.pro.presentation.update.DownloadState.INSTALLING -> {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                color = BrandPrimary,
-                                strokeWidth = 2.dp
-                            )
-                            Text(
-                                text = "Installing Update...",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = BrandText,
-                                fontFamily = PoppinsFontFamily
-                            )
-                        }
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = BrandPrimary,
+                            strokeWidth = 2.dp
+                        )
+                        Text(
+                            text = "Installing Update...",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = BrandText,
+                            fontFamily = PoppinsFontFamily
+                        )
                     }
                 }
                 else -> {
@@ -3172,89 +3239,35 @@ fun AppStatusCard(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(
-                            verticalArrangement = Arrangement.Center
-                        ) {
+                        Column {
                             Text(
-                                text = "App Version",
-                                fontSize = 11.sp,
+                                text = "Installed:",
+                                fontSize = 10.sp,
                                 color = Color(0xFF64748B),
-                                fontWeight = FontWeight.Medium,
                                 fontFamily = PoppinsFontFamily
                             )
                             Text(
                                 text = installedVersion,
-                                fontSize = 15.sp,
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = BrandText,
+                                color = Color(0xFF0F172A),
                                 fontFamily = PoppinsFontFamily
                             )
                         }
-
-                        if (isUpdateAvailable) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                    modifier = Modifier
-                                        .background(Color(0xFFFEF2F2), RoundedCornerShape(8.dp))
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(6.dp)
-                                            .background(Color(0xFFEF4444), androidx.compose.foundation.shape.CircleShape)
-                                    )
-                                    Text(
-                                        text = "Update Available",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFEF4444),
-                                        fontFamily = PoppinsFontFamily
-                                    )
-                                }
-
-                                Button(
-                                    onClick = { updateViewModel.startDownload(context) },
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
-                                    Text(
-                                        text = "Update Now",
-                                        fontSize = 11.sp,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = PoppinsFontFamily
-                                    )
-                                }
-                            }
-                        } else {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier
-                                    .background(Color(0xFFF0FDF4), RoundedCornerShape(8.dp))
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .graphicsLayer { alpha = dotAlpha }
-                                        .background(Color(0xFF22C55E), androidx.compose.foundation.shape.CircleShape)
-                                )
-                                Text(
-                                    text = "Up To Date",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF22C55E),
-                                    fontFamily = PoppinsFontFamily
-                                )
-                            }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "Latest:",
+                                fontSize = 10.sp,
+                                color = Color(0xFF64748B),
+                                fontFamily = PoppinsFontFamily
+                            )
+                            Text(
+                                text = latestVersionName,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0F172A),
+                                fontFamily = PoppinsFontFamily
+                            )
                         }
                     }
                 }

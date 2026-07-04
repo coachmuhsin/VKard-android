@@ -95,23 +95,15 @@ jobs:
       - name: Build App
         run: |
           ./gradlew clean --build-cache --parallel --no-daemon
-          ./gradlew assembleDebug --build-cache --parallel --no-daemon
-          if [ "${{ env.HAS_SIGNING }}" = "true" ]; then
-            ./gradlew assembleRelease bundleRelease --build-cache --parallel --no-daemon
-          fi
+          ./gradlew assembleRelease bundleRelease --build-cache --parallel --no-daemon
         shell: bash
 
       - name: Package Outputs
         run: |
           mkdir -p build_outputs
-          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
-            cp app/build/outputs/apk/release/app-release.apk build_outputs/VKARD-PRO-v${{ env.VERSION_CODE }}.apk
-            cp app/build/outputs/bundle/release/app-release.aab build_outputs/VKARD-PRO-v${{ env.VERSION_CODE }}.aab
-            echo "IS_RELEASE_READY=true" >> $GITHUB_ENV
-          else
-            cp app/build/outputs/apk/debug/app-debug.apk build_outputs/VKARD-PRO-v${{ env.VERSION_CODE }}.apk
-            echo "IS_RELEASE_READY=false" >> $GITHUB_ENV
-          fi
+          cp app/build/outputs/apk/release/app-release.apk build_outputs/VKARD-PRO-v${{ env.VERSION_CODE }}.apk
+          cp app/build/outputs/bundle/release/app-release.aab build_outputs/VKARD-PRO-v${{ env.VERSION_CODE }}.aab
+          echo "IS_RELEASE_READY=true" >> $GITHUB_ENV
         shell: bash
 
       - name: Create Release
@@ -123,21 +115,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Debug APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug-apk
-          path: app/build/outputs/apk/debug/**/*.apk
-
       - name: Upload Release APK Artifact
-        if: env.IS_RELEASE_READY == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: release-apk
           path: app/build/outputs/apk/release/**/*.apk
 
       - name: Upload Release AAB Artifact
-        if: env.IS_RELEASE_READY == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: release-aab

@@ -18,17 +18,18 @@ if (versionPropertiesFile.exists()) {
     versionPropertiesFile.inputStream().use { versionProperties.load(it) }
 }
 
-val major = versionProperties.getProperty("major")?.toIntOrNull() ?: 1
-val minor = versionProperties.getProperty("minor")?.toIntOrNull() ?: 0
-
 val extVersionCode = if (project.hasProperty("versionCode")) {
     project.property("versionCode").toString().toInt()
+} else if (versionProperties.containsKey("versionCode")) {
+    versionProperties.getProperty("versionCode").toString().toInt()
 } else {
     1
 }
 
 val extVersionName = if (project.hasProperty("versionName")) {
     project.property("versionName").toString()
+} else if (versionProperties.containsKey("versionName")) {
+    versionProperties.getProperty("versionName").toString()
 } else {
     "Release 1"
 }

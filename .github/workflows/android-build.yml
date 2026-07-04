@@ -66,6 +66,10 @@ jobs:
           print(f'VERSION_NAME: {new_version_name}')
           print(f'VERSION_CODE: {new_version_code}')
  
+          with open('version.properties', 'w') as prop_file:
+              prop_file.write(f'versionCode={new_version_code}\n')
+              prop_file.write(f'versionName={new_version_name}\n')
+ 
           with open(os.environ['GITHUB_ENV'], 'a') as env_file:
               env_file.write(f'VERSION_NAME={new_version_name}\n')
               env_file.write(f'VERSION_CODE={new_version_code}\n')
@@ -91,9 +95,9 @@ jobs:
       - name: Build App
         run: |
           ./gradlew clean --build-cache --parallel --no-daemon
-          ./gradlew assembleDebug -PversionCode=${{ env.VERSION_CODE }} -PversionName=${{ env.VERSION_NAME }} --build-cache --parallel --no-daemon
+          ./gradlew assembleDebug --build-cache --parallel --no-daemon
           if [ "${{ env.HAS_SIGNING }}" = "true" ]; then
-            ./gradlew assembleRelease bundleRelease -PversionCode=${{ env.VERSION_CODE }} -PversionName=${{ env.VERSION_NAME }} --build-cache --parallel --no-daemon
+            ./gradlew assembleRelease bundleRelease --build-cache --parallel --no-daemon
           fi
         shell: bash
 

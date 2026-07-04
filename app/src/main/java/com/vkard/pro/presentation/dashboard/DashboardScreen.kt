@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -99,6 +100,8 @@ fun DashboardScreen(
                     ) {
                         updateViewModel.verifyAndInstallApk(context)
                     }
+                }
+                if (updateViewModel.isUpdateAvailable() || updateViewModel.downloadState != com.vkard.pro.presentation.update.DownloadState.IDLE) {
                     updateViewModel.checkForUpdates(forceRefresh = true)
                 }
             }
@@ -273,12 +276,12 @@ fun SuperAdminView(
                 item {
                     val latestCards = data.cards.filter { it.created_by == userId }
                         .sortedByDescending { it.created_at ?: "" }
-                        .take(3)
                     LatestVisitingCardsSection(
                         latestCards = latestCards,
                         onCreateCard = onCreateCard,
                         onViewAll = { onTabSelected("cards") },
-                        onShareCard = onShareCard
+                        onShareCard = onShareCard,
+                        onDeleteCard = onDeleteCard
                     )
                 }
             }
@@ -364,12 +367,12 @@ fun FranchiseView(
                 item {
                     val latestCards = data.cards.filter { it.created_by == userId }
                         .sortedByDescending { it.created_at ?: "" }
-                        .take(3)
                     LatestVisitingCardsSection(
                         latestCards = latestCards,
                         onCreateCard = onCreateCard,
                         onViewAll = { onTabSelected("cards") },
-                        onShareCard = onShareCard
+                        onShareCard = onShareCard,
+                        onDeleteCard = onDeleteCard
                     )
                 }
             }
@@ -476,12 +479,12 @@ fun AgentView(
                 item {
                     val latestCards = data.cards.filter { it.created_by == userId }
                         .sortedByDescending { it.created_at ?: "" }
-                        .take(3)
                     LatestVisitingCardsSection(
                         latestCards = latestCards,
                         onCreateCard = onCreateCard,
                         onViewAll = { onTabSelected("cards") },
-                        onShareCard = onShareCard
+                        onShareCard = onShareCard,
+                        onDeleteCard = onDeleteCard
                     )
                 }
             }
@@ -2625,13 +2628,18 @@ fun CustomersManagementTab(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun LatestVisitingCardsSection(
     latestCards: List<DigitalCardWithSub>,
     onCreateCard: (String?) -> Unit,
     onViewAll: () -> Unit,
-    onShareCard: (String) -> Unit
+    onShareCard: (String) -> Unit,
+    onDeleteCard: (String) -> Unit
 ) {
+    var activeBottomSheetCard by remember { mutableStateOf<DigitalCardWithSub?>(null) }
+    val context = LocalContext.current
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -2704,110 +2712,156 @@ fun LatestVisitingCardsSection(
                 }
             }
         } else {
-            latestCards.forEach { card ->
-                val statusColor = when (card.status.lowercase()) {
-                    "active" -> BrandSuccess
-                    "draft", "inactive" -> BrandWarning
-                    else -> BrandError
-                }
-                val expiryDate = card.subscriptions.firstOrNull()?.end_date?.substringBefore("T") ?: "N/A"
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp)
-                        .shadow(2.dp, RoundedCornerShape(18.dp), ambientColor = Color(0x0A000000), spotColor = Color(0x0A000000))
-                        .background(Color.White, RoundedCornerShape(18.dp))
-                        .border(1.dp, BrandBorder, RoundedCornerShape(18.dp))
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // Left: Profile photo (60dp circular)
-                    CardAvatar(logoUrl = card.logo_url, fullName = card.full_name, size = 60.dp)
-
-                    // Middle: Name, Business Details, Expiry
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val displayCards = latestCards.take(4)
+                displayCards.forEach { card ->
                     Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.Center
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .shadow(2.dp, CircleShape)
+                                .background(Color.White, CircleShape)
+                                .then(
+                                    if (card.status.lowercase() == "active") {
+                                        Modifier.border(2.dp, BrandPrimary, CircleShape)
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .clickable {
+                                    activeBottomSheetCard = card
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CardAvatar(logoUrl = card.logo_url, fullName = card.full_name, size = 56.dp)
+                        }
+                        
+                        val displayName = (card.full_name.trim().split(" ").firstOrNull() ?: "").take(10)
+                        Text(
+                            text = displayName,
+                            fontSize = 12.sp,
+                            color = BrandText,
+                            fontFamily = PoppinsFontFamily,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                if (latestCards.size > 4) {
+                    val remainingCount = latestCards.size - 4
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .shadow(2.dp, CircleShape)
+                                .background(BrandLightSurface, CircleShape)
+                                .border(1.dp, BrandBorder, CircleShape)
+                                .clickable { onViewAll() },
+                            contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = card.full_name,
-                                fontSize = 15.sp,
+                                text = "+$remainingCount",
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = BrandText,
-                                fontFamily = PoppinsFontFamily,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                color = BrandPrimary,
+                                fontFamily = PoppinsFontFamily
                             )
-                            Box(
-                                modifier = Modifier
-                                    .background(statusColor.copy(alpha = 0.12f), RoundedCornerShape(6.dp))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = card.status.uppercase(),
-                                    fontSize = 8.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = statusColor,
-                                    fontFamily = PoppinsFontFamily
-                                )
-                            }
                         }
-                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = card.company_name,
+                            text = "More",
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF475569),
+                            color = Color(0xFF64748B),
                             fontFamily = PoppinsFontFamily,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            fontWeight = FontWeight.Medium
                         )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Expires: $expiryDate",
-                            fontSize = 11.sp,
-                            color = Color(0xFF94A3B8),
-                            fontFamily = PoppinsFontFamily,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    // Right: QR and Edit actions aligned directly on the right
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        IconButton(
-                            onClick = { onShareCard(card.slug) },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.QrCode,
-                                contentDescription = "QR Code",
-                                tint = BrandPrimary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        IconButton(
-                            onClick = { onCreateCard(card.slug) },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = "Edit Card",
-                                tint = Color(0xFF64748B),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
                     }
                 }
+            }
+        }
+    }
+
+    if (activeBottomSheetCard != null) {
+        val card = activeBottomSheetCard!!
+        ModalBottomSheet(
+            onDismissRequest = { activeBottomSheetCard = null },
+            containerColor = Color.White
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .navigationBarsPadding(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = card.full_name,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    fontFamily = PoppinsFontFamily,
+                    color = BrandText,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                BottomSheetItem(
+                    icon = Icons.Default.Language,
+                    label = "Open Card",
+                    onClick = {
+                        activeBottomSheetCard = null
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://vkard.pro/" + card.slug))
+                        context.startActivity(intent)
+                    }
+                )
+                BottomSheetItem(
+                    icon = Icons.Default.QrCode,
+                    label = "Show QR Code",
+                    onClick = {
+                        activeBottomSheetCard = null
+                        onShareCard(card.slug)
+                    }
+                )
+                BottomSheetItem(
+                    icon = Icons.Default.Edit,
+                    label = "Edit Card",
+                    onClick = {
+                        activeBottomSheetCard = null
+                        onCreateCard(card.slug)
+                    }
+                )
+                BottomSheetItem(
+                    icon = Icons.Default.Share,
+                    label = "Share Card",
+                    onClick = {
+                        activeBottomSheetCard = null
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, "https://vkard.pro/${card.slug}")
+                        }
+                        context.startActivity(Intent.createChooser(shareIntent, "Share Card Link"))
+                    }
+                )
+                HorizontalDivider(color = BrandBorder)
+                BottomSheetItem(
+                    icon = Icons.Default.Delete,
+                    label = "Delete Card",
+                    iconColor = BrandError,
+                    labelColor = BrandError,
+                    onClick = {
+                        activeBottomSheetCard = null
+                        onDeleteCard(card.id ?: "")
+                    }
+                )
             }
         }
     }
@@ -3091,17 +3145,6 @@ fun AppStatusCard(
     val latestVersionName = "Release $latestCode"
     val downloadState = updateViewModel.downloadState
 
-    val infiniteTransition = rememberInfiniteTransition(label = "blinking")
-    val dotAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.2f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(750, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "dotAlpha"
-    )
-
     // Permission Dialog
     if (updateViewModel.showPermissionDialog) {
         AlertDialog(
@@ -3142,25 +3185,138 @@ fun AppStatusCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "VKARD PRO",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = BrandText,
-                    fontFamily = PoppinsFontFamily
-                )
-                
-                if (downloadState == com.vkard.pro.presentation.update.DownloadState.DOWNLOADING ||
-                    downloadState == com.vkard.pro.presentation.update.DownloadState.INSTALLING
+            if (downloadState == com.vkard.pro.presentation.update.DownloadState.DOWNLOAD_COMPLETE) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Spacing or empty
-                } else {
-                    if (isUpdateAvailable) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = BrandSuccess,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "Download Complete",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = BrandText,
+                            fontFamily = PoppinsFontFamily
+                        )
+                    }
+                    Text(
+                        text = "Version: $latestVersionName",
+                        fontSize = 13.sp,
+                        color = Color(0xFF64748B),
+                        fontFamily = PoppinsFontFamily
+                    )
+                    Button(
+                        onClick = { updateViewModel.verifyAndInstallApk(context) },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary),
+                        modifier = Modifier.fillMaxWidth().height(44.dp)
+                    ) {
+                        Text(
+                            text = "Install Now",
+                            fontFamily = PoppinsFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+            } else if (downloadState == com.vkard.pro.presentation.update.DownloadState.DOWNLOADING) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = "Downloading Update",
+                            fontSize = 11.sp,
+                            color = Color(0xFF64748B),
+                            fontWeight = FontWeight.Medium,
+                            fontFamily = PoppinsFontFamily
+                        )
+                        
+                        val percent = updateViewModel.downloadProgress
+                        val filled = percent / 10
+                        val empty = 10 - filled
+                        val bar = "█".repeat(filled) + "░".repeat(empty) + " $percent%"
+                        
+                        Text(
+                            text = bar,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = BrandPrimary,
+                            fontFamily = PoppinsFontFamily
+                        )
+                        
+                        val downloadedMb = String.format(java.util.Locale.US, "%.1f", updateViewModel.downloadedBytes.toDouble() / (1024 * 1024))
+                        val totalMb = String.format(java.util.Locale.US, "%.1f", updateViewModel.totalBytes.toDouble() / (1024 * 1024))
+                        Text(
+                            text = "$downloadedMb MB / $totalMb MB",
+                            fontSize = 10.sp,
+                            color = Color(0xFF94A3B8),
+                            fontFamily = PoppinsFontFamily
+                        )
+                    }
+                    
+                    TextButton(
+                        onClick = { updateViewModel.cancelDownload(context) },
+                        contentPadding = PaddingValues(horizontal = 12.dp)
+                    ) {
+                        Text(
+                            text = "Cancel",
+                            color = Color(0xFFEF4444),
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = PoppinsFontFamily,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            } else if (downloadState == com.vkard.pro.presentation.update.DownloadState.INSTALLING) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = BrandPrimary,
+                        strokeWidth = 2.dp
+                    )
+                    Text(
+                        text = "Installing Update...",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = BrandText,
+                        fontFamily = PoppinsFontFamily
+                    )
+                }
+            } else {
+                if (isUpdateAvailable) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "VKARD PRO",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = BrandText,
+                            fontFamily = PoppinsFontFamily
+                        )
+                        
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -3185,110 +3341,7 @@ fun AppStatusCard(
                                 fontFamily = PoppinsFontFamily
                             )
                         }
-                    } else {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier
-                                .background(Color(0xFFF0FDF4), RoundedCornerShape(8.dp))
-                                .border(BorderStroke(1.dp, Color(0xFF86EFAC)), RoundedCornerShape(8.dp))
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .graphicsLayer { alpha = dotAlpha }
-                                    .background(Color(0xFF22C55E), androidx.compose.foundation.shape.CircleShape)
-                            )
-                            Text(
-                                text = "Up To Date",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF22C55E),
-                                fontFamily = PoppinsFontFamily
-                            )
-                        }
                     }
-                }
-            }
-            
-            when (downloadState) {
-                com.vkard.pro.presentation.update.DownloadState.DOWNLOADING -> {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(
-                                text = "Downloading Update",
-                                fontSize = 11.sp,
-                                color = Color(0xFF64748B),
-                                fontWeight = FontWeight.Medium,
-                                fontFamily = PoppinsFontFamily
-                            )
-                            
-                            val percent = updateViewModel.downloadProgress
-                            val filled = percent / 10
-                            val empty = 10 - filled
-                            val bar = "█".repeat(filled) + "░".repeat(empty) + " $percent%"
-                            
-                            Text(
-                                text = bar,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = BrandPrimary,
-                                fontFamily = PoppinsFontFamily
-                            )
-                            
-                            val downloadedMb = String.format(java.util.Locale.US, "%.1f", updateViewModel.downloadedBytes.toDouble() / (1024 * 1024))
-                            val totalMb = String.format(java.util.Locale.US, "%.1f", updateViewModel.totalBytes.toDouble() / (1024 * 1024))
-                            Text(
-                                text = "$downloadedMb MB / $totalMb MB",
-                                fontSize = 10.sp,
-                                color = Color(0xFF94A3B8),
-                                fontFamily = PoppinsFontFamily
-                            )
-                        }
-                        
-                        TextButton(
-                            onClick = { updateViewModel.cancelDownload(context) },
-                            contentPadding = PaddingValues(horizontal = 12.dp)
-                        ) {
-                            Text(
-                                text = "Cancel",
-                                color = Color(0xFFEF4444),
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = PoppinsFontFamily,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                }
-                com.vkard.pro.presentation.update.DownloadState.INSTALLING -> {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = BrandPrimary,
-                            strokeWidth = 2.dp
-                        )
-                        Text(
-                            text = "Installing Update...",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = BrandText,
-                            fontFamily = PoppinsFontFamily
-                        )
-                    }
-                }
-                else -> {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -3324,6 +3377,27 @@ fun AppStatusCard(
                                 fontFamily = PoppinsFontFamily
                             )
                         }
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = BrandSuccess,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "✓ VKARD PRO is Up to Date.",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = BrandSuccess,
+                            fontFamily = PoppinsFontFamily
+                        )
                     }
                 }
             }

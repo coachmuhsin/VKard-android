@@ -21,6 +21,7 @@ import java.util.Locale
 enum class DownloadState {
     IDLE,
     DOWNLOADING,
+    DOWNLOAD_COMPLETE,
     INSTALLING,
     ERROR
 }
@@ -127,6 +128,7 @@ class UpdateViewModel(
                         }
                     } else {
                         showUpdateBanner = false
+                        downloadState = DownloadState.IDLE
                     }
                 }
                 .onFailure { error ->
@@ -221,8 +223,7 @@ class UpdateViewModel(
                     when (status) {
                         DownloadManager.STATUS_SUCCESSFUL -> {
                             downloading = false
-                            downloadState = DownloadState.INSTALLING
-                            verifyAndInstallApk(context)
+                            downloadState = DownloadState.DOWNLOAD_COMPLETE
                         }
                         DownloadManager.STATUS_FAILED -> {
                             downloading = false
@@ -271,6 +272,7 @@ class UpdateViewModel(
         }
         
         try {
+            downloadState = DownloadState.INSTALLING
             val authority = "${context.packageName}.fileprovider"
             val uri = androidx.core.content.FileProvider.getUriForFile(context, authority, apkFile)
             

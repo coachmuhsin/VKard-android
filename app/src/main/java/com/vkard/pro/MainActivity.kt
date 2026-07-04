@@ -59,7 +59,7 @@ class MainActivity : ComponentActivity() {
                 DisposableEffect(lifecycleOwner) {
                     val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
                         if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                            updateViewModel.checkForUpdates(forceRefresh = true)
+                            updateViewModel.checkForUpdates(forceRefresh = false)
                         }
                     }
                     lifecycleOwner.lifecycle.addObserver(observer)

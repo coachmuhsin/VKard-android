@@ -101,10 +101,6 @@ class UpdateViewModel(
                         $resultString
                     """.trimIndent())
                     
-                    if (!hasUpdate) {
-                        updateRepository.clearCache()
-                    }
-                    
                     latestVersionInfo = info
                     if (hasUpdate) {
                         if (info.forceUpdate) {
@@ -137,7 +133,8 @@ class UpdateViewModel(
     }
 
     fun openUpdateUrl(context: Context) {
-        val url = "https://www.vkard.pro/download"
+        val url = latestVersionInfo?.apk?.takeIf { it.isNotBlank() }
+            ?: "https://github.com/coachmuhsin/VKard-android/releases/latest"
         try {
             val customTabsIntent = androidx.browser.customtabs.CustomTabsIntent.Builder().build()
             customTabsIntent.launchUrl(context, Uri.parse(url))

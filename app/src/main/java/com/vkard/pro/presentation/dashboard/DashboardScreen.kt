@@ -8,6 +8,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -244,6 +249,10 @@ fun SuperAdminView(
                 }
 
                 item {
+                    AppStatusCard(updateViewModel = updateViewModel)
+                }
+
+                item {
                     CardStatsBlock(stats = data.cardStats)
                 }
 
@@ -328,6 +337,10 @@ fun FranchiseView(
                         agentCount = data.agentNetwork.size,
                         onRefresh = onRefresh
                     )
+                }
+
+                item {
+                    AppStatusCard(updateViewModel = updateViewModel)
                 }
 
                 item {
@@ -436,6 +449,10 @@ fun AgentView(
                         agentCount = null,
                         onRefresh = onRefresh
                     )
+                }
+
+                item {
+                    AppStatusCard(updateViewModel = updateViewModel)
                 }
 
                 item {
@@ -1859,22 +1876,16 @@ fun ProfileOptionsTab(
                     fontFamily = PoppinsFontFamily
                 )
                 
-                MetadataRowItem("App Name", "VKARD PRO")
                 val installedVer = updateViewModel.getInstalledVersionName()
                 val installedBuild = updateViewModel.getInstalledVersionCode().toString()
-
-                MetadataRowItem("Installed Version", installedVer)
-                MetadataRowItem("Installed Build", installedBuild)
-                MetadataRowItem("Package Name", context.packageName)
-                
                 val info = updateViewModel.latestVersionInfo
-                MetadataRowItem("Release Date", info?.releaseDate ?: "N/A")
-                MetadataRowItem("Last Update Check", updateViewModel.lastCheckedDisplay)
-                
                 val latestCode = info?.versionCode?.toLong() ?: 0L
                 val hasUpdate = updateViewModel.getInstalledVersionCode() < latestCode
-                
-                MetadataRowItem("Latest GitHub Version", info?.versionName ?: "N/A")
+
+                MetadataRowItem("Installed Release", installedVer)
+                MetadataRowItem("Latest GitHub Release", info?.versionName ?: "N/A")
+                MetadataRowItem("Published Date", info?.releaseDate ?: "N/A")
+                MetadataRowItem("Last Checked", updateViewModel.lastCheckedDisplay)
                 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1882,7 +1893,7 @@ fun ProfileOptionsTab(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Current Update Status",
+                        text = "Update Status",
                         fontSize = 13.sp,
                         color = Color(0xFF64748B),
                         fontFamily = PoppinsFontFamily
@@ -1897,7 +1908,7 @@ fun ProfileOptionsTab(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "🔴 Update Available",
+                                text = "Update Available",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.Red,
@@ -1913,7 +1924,7 @@ fun ProfileOptionsTab(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "🟢 Up to Date",
+                                text = "Up to Date",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = BrandSuccess,
@@ -2000,10 +2011,10 @@ fun ProfileOptionsTab(
                             modifier = Modifier.padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            DebugInfoRow("Installed Version Name", installedVer)
-                            DebugInfoRow("Installed Version Code", installedBuild)
-                            DebugInfoRow("Latest GitHub Version Name", info?.versionName ?: "N/A")
-                            DebugInfoRow("Latest GitHub Version Code", info?.versionCode?.toString() ?: "N/A")
+                            DebugInfoRow("Installed Release Name", installedVer)
+                            DebugInfoRow("Installed Release Code", installedBuild)
+                            DebugInfoRow("Latest GitHub Release Name", info?.versionName ?: "N/A")
+                            DebugInfoRow("Latest GitHub Release Code", info?.versionCode?.toString() ?: "N/A")
                             DebugInfoRow("GitHub Tag Name", info?.tagName ?: "N/A")
                             DebugInfoRow("Release Name", info?.releaseName ?: "N/A")
                             DebugInfoRow("Published Date", info?.releaseDate ?: "N/A")
@@ -2997,5 +3008,126 @@ fun DebugInfoRow(label: String, value: String) {
             textAlign = TextAlign.End,
             modifier = Modifier.weight(0.6f)
         )
+    }
+}
+
+@Composable
+fun AppStatusCard(
+    updateViewModel: com.vkard.pro.presentation.update.UpdateViewModel,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val isUpdateAvailable = updateViewModel.isUpdateAvailable()
+    val installedVersion = updateViewModel.getInstalledVersionName()
+
+    val infiniteTransition = rememberInfiniteTransition(label = "blinking")
+    val dotAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.2f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(750, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dotAlpha"
+    )
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, BrandBorder),
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(1.dp, RoundedCornerShape(16.dp), ambientColor = Color(0x05000000), spotColor = Color(0x05000000))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "App Version",
+                    fontSize = 12.sp,
+                    color = Color(0xFF64748B),
+                    fontWeight = FontWeight.Medium,
+                    fontFamily = PoppinsFontFamily
+                )
+                Text(
+                    text = installedVersion,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = BrandText,
+                    fontFamily = PoppinsFontFamily
+                )
+            }
+
+            if (isUpdateAvailable) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier
+                            .background(Color(0xFFFEF2F2), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(Color(0xFFEF4444), androidx.compose.foundation.shape.CircleShape)
+                        )
+                        Text(
+                            text = "Update Available",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFEF4444),
+                            fontFamily = PoppinsFontFamily
+                        )
+                    }
+
+                    Button(
+                        onClick = { updateViewModel.openUpdateUrl(context) },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Text(
+                            text = "Update",
+                            fontSize = 11.sp,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = PoppinsFontFamily
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .background(Color(0xFFF0FDF4), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .graphicsLayer { alpha = dotAlpha }
+                            .background(Color(0xFF22C55E), androidx.compose.foundation.shape.CircleShape)
+                    )
+                    Text(
+                        text = "Up To Date",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF22C55E),
+                        fontFamily = PoppinsFontFamily
+                    )
+                }
+            }
+        }
     }
 }

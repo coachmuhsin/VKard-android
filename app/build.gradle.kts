@@ -24,13 +24,13 @@ val minor = versionProperties.getProperty("minor")?.toIntOrNull() ?: 0
 val extVersionCode = if (project.hasProperty("versionCode")) {
     project.property("versionCode").toString().toInt()
 } else {
-    major * 1000000 + minor * 1000 + 1
+    1
 }
 
 val extVersionName = if (project.hasProperty("versionName")) {
     project.property("versionName").toString()
 } else {
-    "$major.$minor.1"
+    "Release 1"
 }
 
 val supabaseUrl = localProperties.getProperty("SUPABASE_URL") ?: System.getenv("SUPABASE_URL") ?: ""

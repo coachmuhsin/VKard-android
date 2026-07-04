@@ -2643,12 +2643,12 @@ fun LatestVisitingCardsSection(
                         .shadow(2.dp, RoundedCornerShape(18.dp), ambientColor = Color(0x0A000000), spotColor = Color(0x0A000000))
                         .background(Color.White, RoundedCornerShape(18.dp))
                         .border(1.dp, BrandBorder, RoundedCornerShape(18.dp))
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                        .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // Left: Profile photo (56dp circular)
-                    CardAvatar(logoUrl = card.logo_url, fullName = card.full_name, size = 56.dp)
+                    // Left: Profile photo (60dp circular)
+                    CardAvatar(logoUrl = card.logo_url, fullName = card.full_name, size = 60.dp)
 
                     // Middle: Name, Business Details, Expiry
                     Column(
@@ -2666,8 +2666,7 @@ fun LatestVisitingCardsSection(
                                 color = BrandText,
                                 fontFamily = PoppinsFontFamily,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
+                                overflow = TextOverflow.Ellipsis
                             )
                             Box(
                                 modifier = Modifier
@@ -2684,21 +2683,13 @@ fun LatestVisitingCardsSection(
                             }
                         }
                         Spacer(modifier = Modifier.height(2.dp))
-                        
-                        val bizDesignation = when {
-                            !card.company_name.isNullOrBlank() && !card.designation.isNullOrBlank() -> "${card.company_name} / ${card.designation}"
-                            !card.company_name.isNullOrBlank() -> card.company_name
-                            !card.designation.isNullOrBlank() -> card.designation
-                            else -> "No Business/Designation"
-                        }
-                        
                         Text(
-                            text = bizDesignation,
+                            text = card.company_name,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color(0xFF475569),
                             fontFamily = PoppinsFontFamily,
-                            maxLines = 2,
+                            maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         Spacer(modifier = Modifier.height(2.dp))
@@ -2714,9 +2705,8 @@ fun LatestVisitingCardsSection(
 
                     // Right: QR and Edit actions aligned directly on the right
                     Row(
-                        modifier = Modifier.width(116.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.End
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         IconButton(
                             onClick = { onShareCard(card.slug) },

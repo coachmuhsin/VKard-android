@@ -107,6 +107,7 @@ jobs:
               exit 1
           fi
 
+          echo "Decoded size:"
           ls -lh release.keystore
 
           echo "RELEASE_STORE_FILE=../release.keystore" >> local.properties

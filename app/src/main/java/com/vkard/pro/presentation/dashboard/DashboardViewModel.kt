@@ -235,128 +235,74 @@ class DashboardViewModel(
             try {
                 val franchiseId = sessionManager.getUserId() ?: throw Exception("Unauthorized")
                 
-                // Fetch latest sender (franchise) credits
-                val franchiseResponse = supabase.postgrest["franchises"]
-                    .select { filter { eq("id", franchiseId) } }
-                    .decodeList<JsonObject>()
-                val latestFranchiseCredits = franchiseResponse.firstOrNull()?.get("credits_balance")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                // Perform the updates inside a single database transaction using the custom postgres RPC function
+                val rpcResponse = supabase.postgrest.rpc(
+                    function = "update_agent_card_balance",
+                    parameters = buildJsonObject {
+                        put("p_franchise_id", franchiseId)
+                        put("p_agent_id", agentId)
+                        put("p_new_credits", newCredits)
+                        put("p_new_name", newName)
+                        put("p_new_status", newStatus)
+                    }
+                )
                 
-                // Fetch latest agent credits
-                val agentResponse = supabase.postgrest["agents"]
-                    .select { filter { eq("id", agentId) } }
-                    .decodeList<JsonObject>()
-                val latestAgentCredits = agentResponse.firstOrNull()?.get("credits_balance")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
-                
-                if (newCredits > latestAgentCredits) {
-                    // Credit Transfer
-                    val transferAmount = newCredits - latestAgentCredits
-                    if (latestFranchiseCredits < transferAmount) {
-                        throw Exception("Insufficient Wallet Credits")
-                    }
-                    
-                    // Deduct franchise credits
-                    supabase.postgrest["franchises"].update({
-                        set("credits_balance", latestFranchiseCredits - transferAmount)
-                    }) {
-                        filter { eq("id", franchiseId) }
-                    }
-                    
-                    try {
-                        // Add agent credits
-                        supabase.postgrest["agents"].update({
-                            set("credits_balance", newCredits)
-                            set("name", newName)
-                            set("status", newStatus)
-                        }) {
-                            filter { eq("id", agentId) }
-                        }
-                        
-                        // Insert ledger entries
-                        val senderLedger = buildJsonObject {
-                            put("user_id", franchiseId)
-                            put("transaction_type", "Credit Transfer")
-                            put("credits_used", -transferAmount)
-                            put("remarks", "Transferred to agent: $newName")
-                        }
-                        val receiverLedger = buildJsonObject {
-                            put("user_id", agentId)
-                            put("transaction_type", "Credit Received")
-                            put("credits_used", transferAmount)
-                            put("remarks", "Received from franchise")
-                        }
-                        supabase.postgrest["revenue_ledger"].insert(listOf(senderLedger, receiverLedger))
-                        
-                    } catch (e: Exception) {
-                        // Rollback step 1: refund franchise
-                        supabase.postgrest["franchises"].update({
-                            set("credits_balance", latestFranchiseCredits)
-                        }) {
-                            filter { eq("id", franchiseId) }
-                        }
-                        throw e
-                    }
-                } else if (newCredits < latestAgentCredits) {
-                    // Reclaim Credits
-                    val transferAmount = latestAgentCredits - newCredits
-                    if (latestAgentCredits < transferAmount) {
-                        throw Exception("Agent has insufficient credits to reclaim")
-                    }
-                    
-                    // Deduct agent credits
-                    supabase.postgrest["agents"].update({
-                        set("credits_balance", newCredits)
-                        set("name", newName)
-                        set("status", newStatus)
-                    }) {
-                        filter { eq("id", agentId) }
-                    }
-                    
-                    try {
-                        // Add franchise credits
-                        supabase.postgrest["franchises"].update({
-                            set("credits_balance", latestFranchiseCredits + transferAmount)
-                        }) {
-                            filter { eq("id", franchiseId) }
-                        }
-                        
-                        // Insert ledger entries
-                        val senderLedger = buildJsonObject {
-                            put("user_id", agentId)
-                            put("transaction_type", "Credit Returned")
-                            put("credits_used", -transferAmount)
-                            put("remarks", "Returned to franchise")
-                        }
-                        val receiverLedger = buildJsonObject {
-                            put("user_id", franchiseId)
-                            put("transaction_type", "Credit Reclaimed")
-                            put("credits_used", transferAmount)
-                            put("remarks", "Reclaimed from agent: $newName")
-                        }
-                        supabase.postgrest["revenue_ledger"].insert(listOf(senderLedger, receiverLedger))
-                        
-                    } catch (e: Exception) {
-                        // Rollback step 1: refund agent
-                        supabase.postgrest["agents"].update({
-                            set("credits_balance", latestAgentCredits)
-                        }) {
-                            filter { eq("id", agentId) }
-                        }
-                        throw e
-                    }
-                } else {
-                    // Update metadata only
-                    supabase.postgrest["agents"].update({
-                        set("name", newName)
-                        set("status", newStatus)
-                    }) {
-                        filter { eq("id", agentId) }
-                    }
+                val responseJson = rpcResponse.decodeAs<JsonObject>()
+                val errorMsg = responseJson["error"]?.jsonPrimitive?.content
+                if (!errorMsg.isNullOrEmpty()) {
+                    throw Exception(errorMsg)
                 }
                 
                 loadDashboard()
                 onComplete(Result.success(Unit))
             } catch (e: Exception) {
-                onComplete(Result.failure(e))
+                // Log the technical error only to Logcat (Debug mode)
+                if (com.vkard.pro.BuildConfig.DEBUG) {
+                    android.util.Log.e("DashboardViewModel", "Database transaction failed", e)
+                }
+                
+                val msg = e.message ?: ""
+                val friendlyMessage = when {
+                    msg.contains("http", ignoreCase = true) ||
+                    msg.contains("jwt", ignoreCase = true) ||
+                    msg.contains("bearer", ignoreCase = true) ||
+                    msg.contains("apikey", ignoreCase = true) ||
+                    msg.contains("token", ignoreCase = true) ||
+                    msg.contains("postgrest", ignoreCase = true) ||
+                    msg.contains("postgres", ignoreCase = true) ||
+                    msg.contains("supabase", ignoreCase = true) ||
+                    msg.contains("sql", ignoreCase = true) ||
+                    msg.contains("headers", ignoreCase = true) -> {
+                        "Something went wrong. Please try again later."
+                    }
+                    msg.contains("row-level security", ignoreCase = true) ||
+                    msg.contains("violates row-level security", ignoreCase = true) ||
+                    msg.contains("policy", ignoreCase = true) ||
+                    msg.contains("permission denied", ignoreCase = true) ||
+                    msg.contains("unauthorized", ignoreCase = true) ||
+                    msg.contains("not authorized", ignoreCase = true) -> {
+                        "Permission denied. You are not authorized to update this agent."
+                    }
+                    msg.contains("connect", ignoreCase = true) ||
+                    msg.contains("network", ignoreCase = true) ||
+                    msg.contains("timeout", ignoreCase = true) ||
+                    msg.contains("host", ignoreCase = true) ||
+                    e is java.net.ConnectException ||
+                    e is java.net.UnknownHostException -> {
+                        "Unable to connect. Please try again."
+                    }
+                    msg.contains("Insufficient", ignoreCase = true) || 
+                    msg.contains("wallet", ignoreCase = true) ||
+                    msg.contains("balance", ignoreCase = true) ||
+                    msg.contains("credits", ignoreCase = true) -> {
+                        msg
+                    }
+                    else -> {
+                        "Something went wrong. Please try again later."
+                    }
+                }
+                
+                onComplete(Result.failure(Exception(friendlyMessage)))
             }
         }
     }

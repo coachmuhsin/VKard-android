@@ -1382,6 +1382,7 @@ fun EditAgentDialog(
     onDismiss: () -> Unit,
     onSave: (newName: String, newCredits: Int, newStatus: String, onComplete: (Result<Unit>) -> Unit) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var name by remember { mutableStateOf(agent.name) }
     var credits by remember { mutableStateOf(agent.credits.toString()) }
     var status by remember { mutableStateOf(agent.status) }
@@ -1460,6 +1461,7 @@ fun EditAgentDialog(
                         onSave(name, targetCredits, status) { result ->
                             isSaving = false
                             result.onSuccess {
+                                android.widget.Toast.makeText(context, "✓ Card balance updated successfully.", android.widget.Toast.LENGTH_LONG).show()
                                 onDismiss()
                             }.onFailure {
                                 errorMessage = it.message ?: "Failed to save agent details."

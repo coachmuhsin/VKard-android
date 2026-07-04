@@ -61,16 +61,11 @@ android {
         create("release") {
             val storeFilePath = localProperties.getProperty("RELEASE_STORE_FILE")
             if (!storeFilePath.isNullOrEmpty()) {
-                storeFile = file(storeFilePath)
+                val storePath = if (storeFilePath.startsWith("../")) storeFilePath.substring(3) else storeFilePath
+                storeFile = rootProject.file(storePath)
                 storePassword = localProperties.getProperty("RELEASE_STORE_PASSWORD")
                 keyAlias = localProperties.getProperty("RELEASE_KEY_ALIAS")
                 keyPassword = localProperties.getProperty("RELEASE_KEY_PASSWORD")
-            } else {
-                val debugConfig = getByName("debug")
-                storeFile = debugConfig.storeFile
-                storePassword = debugConfig.storePassword
-                keyAlias = debugConfig.keyAlias
-                keyPassword = debugConfig.keyPassword
             }
         }
     }

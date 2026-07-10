@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vkard.pro.domain.model.KycSubmission
 import com.vkard.pro.domain.repository.AuthRepository
+import com.vkard.pro.data.remote.UuidValidator
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
 
@@ -67,6 +68,11 @@ class KycViewModel(
     }
 
     fun loadSubmission() {
+        if (!UuidValidator.isValidUuid(userId)) {
+            isLoading = false
+            errorMessage = "Please complete your profile."
+            return
+        }
         viewModelScope.launch {
             isLoading = true
             errorMessage = null
@@ -128,6 +134,11 @@ class KycViewModel(
     }
 
     fun saveDraft(onComplete: (Boolean) -> Unit = {}) {
+        if (!UuidValidator.isValidUuid(userId)) {
+            errorMessage = "Please complete your profile."
+            onComplete(false)
+            return
+        }
         viewModelScope.launch {
             isSaving = true
             errorMessage = null
@@ -181,6 +192,11 @@ class KycViewModel(
     }
 
     fun submitKyc(onComplete: (Boolean) -> Unit) {
+        if (!UuidValidator.isValidUuid(userId)) {
+            errorMessage = "Please complete your profile."
+            onComplete(false)
+            return
+        }
         viewModelScope.launch {
             isSaving = true
             errorMessage = null

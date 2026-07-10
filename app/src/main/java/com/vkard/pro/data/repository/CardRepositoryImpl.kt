@@ -3,6 +3,7 @@ package com.vkard.pro.data.repository
 import com.vkard.pro.Config
 import com.vkard.pro.data.local.SecureSessionManager
 import com.vkard.pro.data.remote.SupabaseClientProvider
+import com.vkard.pro.data.remote.UuidValidator
 import com.vkard.pro.domain.model.DigitalCard
 import com.vkard.pro.domain.model.RevenueLedger
 import com.vkard.pro.domain.repository.CardRepository
@@ -126,17 +127,23 @@ class CardRepositoryImpl(
     }
     
     override suspend fun updateCard(card: DigitalCard): Result<Unit> {
+        val cardId = card.id
+        if (!UuidValidator.isValidUuid(cardId)) {
+            return Result.failure(Exception("Missing or invalid card ID for update operation."))
+        }
         return runCatching {
-            val cardId = card.id ?: throw Exception("Missing card ID for update operation.")
             supabase.postgrest["digital_cards"].update(card) {
                 filter {
-                    eq("id", cardId)
+                    eq("id", cardId!!)
                 }
             }
         }
     }
     
     override suspend fun deleteCard(cardId: String): Result<Unit> {
+        if (!UuidValidator.isValidUuid(cardId)) {
+            return Result.failure(Exception("Invalid card ID UUID."))
+        }
         return runCatching {
             supabase.postgrest["digital_cards"].delete {
                 filter {

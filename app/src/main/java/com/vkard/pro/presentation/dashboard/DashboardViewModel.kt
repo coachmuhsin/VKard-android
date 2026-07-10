@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vkard.pro.data.local.SecureSessionManager
 import com.vkard.pro.data.remote.SupabaseClientProvider
+import com.vkard.pro.data.remote.UuidValidator
 import com.vkard.pro.domain.model.DigitalCardWithSub
 import com.vkard.pro.domain.model.RevenueLedger
 import com.vkard.pro.domain.model.KycSubmission
@@ -90,10 +91,12 @@ class DashboardViewModel(
         val role = sessionManager.getRole() ?: "agent"
         
         viewModelScope.launch {
-            val userId = sessionManager.getUserId() ?: run {
-                uiState = DashboardUiState.Error("Session expired.")
+            val rawUserId = sessionManager.getUserId()
+            if (!UuidValidator.isValidUuid(rawUserId)) {
+                uiState = DashboardUiState.Error("Please complete your profile.")
                 return@launch
             }
+            val userId = rawUserId!!
             try {
                 // Fetch all cards with nested subscriptions
                 val allCards = supabase.postgrest["digital_cards"]
@@ -196,11 +199,11 @@ class DashboardViewModel(
                         
                         val franchiseId = agentProfile?.get("franchise_id")?.jsonPrimitive?.content
                         var affiliation = "Company Direct"
-                        if (franchiseId != null) {
+                        if (UuidValidator.isValidUuid(franchiseId)) {
                             val franchiseList = supabase.postgrest["franchises"]
                                 .select {
                                     filter {
-                                        eq("id", franchiseId)
+                                        eq("id", franchiseId!!)
                                     }
                                 }
                                 .decodeList<JsonObject>()
@@ -223,12 +226,28 @@ class DashboardViewModel(
                     }
                 }
             } catch (e: Exception) {
-                uiState = DashboardUiState.Error(e.message ?: "Failed to load dashboard.")
+                if (com.vkard.pro.BuildConfig.DEBUG) {
+                    android.util.Log.e("DashboardViewModel", "Failed to load dashboard", e)
+                }
+                val msg = e.message ?: ""
+                val friendlyMessage = when {
+                    msg.contains("profile", ignoreCase = true) || msg.contains("incomplete", ignoreCase = true) -> {
+                        "Please complete your profile."
+                    }
+                    msg.contains("franchise", ignoreCase = true) -> {
+                        "Unable to load franchise information."
+                    }
+                    else -> {
+                        "Something went wrong."
+                    }
+                }
+                uiState = DashboardUiState.Error(friendlyMessage)
             }
         }
     }
 
     fun deleteCard(cardId: String) {
+        if (!UuidValidator.isValidUuid(cardId)) return
         viewModelScope.launch {
             cardRepository.deleteCard(cardId)
                 .onSuccess {
@@ -246,7 +265,10 @@ class DashboardViewModel(
     ) {
         viewModelScope.launch {
             try {
-                val franchiseId = sessionManager.getUserId() ?: throw Exception("Unauthorized")
+                val franchiseId = sessionManager.getUserId()
+                if (!UuidValidator.isValidUuid(franchiseId) || !UuidValidator.isValidUuid(agentId)) {
+                    throw Exception("Permission denied.")
+                }
                 
                 // Perform the updates inside a single database transaction using the custom postgres RPC function
                 val rpcResponse = supabase.postgrest.rpc(
@@ -328,8 +350,11 @@ class DashboardViewModel(
     ) {
         viewModelScope.launch {
             try {
-                val adminId = sessionManager.getUserId() ?: throw Exception("Unauthorized")
-                authRepository.updateKycStatus(submissionId, status, rejectionReason, adminId)
+                val adminId = sessionManager.getUserId()
+                if (!UuidValidator.isValidUuid(submissionId) || !UuidValidator.isValidUuid(adminId)) {
+                    throw Exception("Permission denied.")
+                }
+                authRepository.updateKycStatus(submissionId, status, rejectionReason, adminId!!)
                     .onSuccess {
                         loadDashboard()
                         onComplete(Result.success(Unit))
@@ -366,7 +391,11 @@ class DashboardViewModel(
     ) {
         viewModelScope.launch {
             try {
-                val franchiseId = sessionManager.getUserId() ?: throw Exception("Unauthorized")
+                val rawFranchiseId = sessionManager.getUserId()
+                if (!UuidValidator.isValidUuid(rawFranchiseId)) {
+                    throw Exception("Permission denied.")
+                }
+                val franchiseId = rawFranchiseId!!
                 
                 // Fetch latest franchise credits
                 val franchiseResponse = supabase.postgrest["franchises"]
@@ -438,6 +467,7 @@ class DashboardViewModel(
     }
 
     fun updateFranchiseProfile(franchiseId: String, newName: String) {
+        if (!UuidValidator.isValidUuid(franchiseId)) return
         viewModelScope.launch {
             try {
                 supabase.postgrest["franchises"].update({

@@ -2,6 +2,7 @@ package com.vkard.pro.data.repository
 
 import com.vkard.pro.data.local.SecureSessionManager
 import com.vkard.pro.data.remote.SupabaseClientProvider
+import com.vkard.pro.data.remote.UuidValidator
 import com.vkard.pro.domain.model.User
 import com.vkard.pro.domain.model.KycSubmission
 import com.vkard.pro.domain.repository.AuthRepository
@@ -120,6 +121,9 @@ class AuthRepositoryImpl(
     }
     
     override suspend fun getKycStatus(userId: String): Result<String> {
+        if (!UuidValidator.isValidUuid(userId)) {
+            return Result.success("draft")
+        }
         return runCatching {
             val kycList = supabase.postgrest["kyc_submissions"]
                 .select {
@@ -134,6 +138,9 @@ class AuthRepositoryImpl(
     }
 
     override suspend fun getKycSubmission(userId: String): Result<KycSubmission?> {
+        if (!UuidValidator.isValidUuid(userId)) {
+            return Result.success(null)
+        }
         return runCatching {
             val kycList = supabase.postgrest["kyc_submissions"]
                 .select {
@@ -146,6 +153,9 @@ class AuthRepositoryImpl(
     }
 
     override suspend fun upsertKycSubmission(submission: KycSubmission): Result<Unit> {
+        if (!UuidValidator.isValidUuid(submission.user_id)) {
+            return Result.failure(Exception("Invalid user ID UUID."))
+        }
         return runCatching {
             supabase.postgrest["kyc_submissions"].upsert(submission)
         }
@@ -181,6 +191,9 @@ class AuthRepositoryImpl(
     }
 
     override suspend fun getFranchiseAgentsKycSubmissions(franchiseId: String): Result<List<KycSubmission>> {
+        if (!UuidValidator.isValidUuid(franchiseId)) {
+            return Result.success(emptyList())
+        }
         return runCatching {
             val agents = supabase.postgrest["agents"]
                 .select {
@@ -204,6 +217,9 @@ class AuthRepositoryImpl(
         rejectionReason: String?,
         verifiedBy: String
     ): Result<Unit> {
+        if (!UuidValidator.isValidUuid(submissionId) || !UuidValidator.isValidUuid(verifiedBy)) {
+            return Result.failure(Exception("Invalid UUID parameters."))
+        }
         return runCatching {
             supabase.postgrest["kyc_submissions"].update({
                 set("status", status)

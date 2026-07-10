@@ -54,6 +54,8 @@ import androidx.compose.ui.unit.sp
 import com.vkard.pro.domain.model.DigitalCardWithSub
 import com.vkard.pro.domain.model.RevenueLedger
 import com.vkard.pro.presentation.theme.PoppinsFontFamily
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 
 // Brand Colors
 private val BrandPrimary = Color(0xFF077DF7)
@@ -293,7 +295,13 @@ fun SuperAdminView(
             CustomersManagementTab(onManageCustomers = onManageCustomers)
         }
         "agents" -> {
-            AgentsListTab(agents = emptyList(), allCards = data.cards, isSuperAdmin = true, onUpdateAgent = { _, _, _, _, _ -> }, onCreateAgent = null, onRefresh = onRefresh)
+            KycReviewsTab(
+                kycSubmissions = data.kycSubmissions,
+                onUpdateKycStatus = { subId, status, reason, onComplete ->
+                    viewModel.updateKycStatus(subId, status, reason, onComplete)
+                },
+                onRefresh = onRefresh
+            )
         }
         "support" -> {
             SupportTab(userName = "Super Admin", userRole = "Super Admin", userCode = "N/A", userEmail = "admin@vkard.pro")
@@ -382,14 +390,44 @@ fun FranchiseView(
         }
         "agents" -> {
             var showCreateAgentDialog by remember { mutableStateOf(false) }
-            AgentsListTab(
-                agents = data.agentNetwork,
-                allCards = data.cards,
-                isSuperAdmin = false,
-                onUpdateAgent = onUpdateAgent,
-                onCreateAgent = { showCreateAgentDialog = true },
-                onRefresh = onRefresh
-            )
+            var showKycReviews by remember { mutableStateOf(false) }
+            
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = !showKycReviews,
+                        onClick = { showKycReviews = false },
+                        label = { Text("Agents List", fontFamily = PoppinsFontFamily) }
+                    )
+                    FilterChip(
+                        selected = showKycReviews,
+                        onClick = { showKycReviews = true },
+                        label = { Text("KYC Reviews (${data.kycSubmissions.size})", fontFamily = PoppinsFontFamily) }
+                    )
+                }
+                
+                if (showKycReviews) {
+                    KycReviewsTab(
+                        kycSubmissions = data.kycSubmissions,
+                        onUpdateKycStatus = { subId, status, reason, onComplete ->
+                            viewModel.updateKycStatus(subId, status, reason, onComplete)
+                        },
+                        onRefresh = onRefresh
+                    )
+                } else {
+                    AgentsListTab(
+                        agents = data.agentNetwork,
+                        allCards = data.cards,
+                        isSuperAdmin = false,
+                        onUpdateAgent = onUpdateAgent,
+                        onCreateAgent = { showCreateAgentDialog = true },
+                        onRefresh = onRefresh
+                    )
+                }
+            }
             if (showCreateAgentDialog) {
                 CreateAgentDialog(
                     franchiseCredits = data.credits,
@@ -3406,3 +3444,328 @@ fun AppStatusCard(
         }
     }
 }
+
+@Composable
+fun KycReviewsTab(
+    kycSubmissions: List<com.vkard.pro.domain.model.KycSubmission>,
+    onUpdateKycStatus: (submissionId: String, status: String, rejectionReason: String?, onComplete: (Result<Unit>) -> Unit) -> Unit,
+    onRefresh: () -> Unit
+) {
+    val context = LocalContext.current
+    var selectedSubmissionForReview by remember { mutableStateOf<com.vkard.pro.domain.model.KycSubmission?>(null) }
+    var rejectionReason by remember { mutableStateOf("") }
+    var showRejectDialog by remember { mutableStateOf(false) }
+    var isRequestReupload by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Spacer(modifier = Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("KYC Submissions", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = BrandText, fontFamily = PoppinsFontFamily)
+            IconButton(
+                onClick = onRefresh,
+                modifier = Modifier
+                    .background(BrandLightSurface, androidx.compose.foundation.shape.CircleShape)
+                    .size(44.dp)
+                    .border(1.dp, BrandBorder, androidx.compose.foundation.shape.CircleShape)
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = BrandPrimary, modifier = Modifier.size(20.dp))
+            }
+        }
+
+        if (kycSubmissions.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize().padding(top = 40.dp), contentAlignment = Alignment.Center) {
+                Text("No KYC submissions found.", color = Color(0xFF64748B), fontSize = 14.sp, fontFamily = PoppinsFontFamily)
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(bottom = 120.dp)
+            ) {
+                items(kycSubmissions) { sub ->
+                    val status = sub.status.lowercase()
+                    val badgeColor = when (status) {
+                        "verified" -> BrandSuccess
+                        "rejected" -> BrandError
+                        "pending" -> BrandWarning
+                        else -> Color(0xFF64748B)
+                    }
+                    val statusBg = when (status) {
+                        "verified" -> BrandSuccess.copy(alpha = 0.1f)
+                        "rejected" -> BrandError.copy(alpha = 0.1f)
+                        "pending" -> BrandWarning.copy(alpha = 0.1f)
+                        else -> Color(0xFF64748B).copy(alpha = 0.1f)
+                    }
+
+                    Card(
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedSubmissionForReview = sub }
+                            .shadow(1.dp, RoundedCornerShape(20.dp))
+                            .border(1.dp, BrandBorder, RoundedCornerShape(20.dp)),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(CircleShape)
+                                    .background(BrandLightSurface)
+                                    .border(1.5.dp, BrandPrimary, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (sub.profile_photo_url.isNotEmpty()) {
+                                    AsyncImage(
+                                        model = sub.profile_photo_url,
+                                        contentDescription = "Profile Photo",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Icon(Icons.Default.Person, contentDescription = null, tint = BrandPrimary)
+                                }
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(sub.business_name, fontWeight = FontWeight.Bold, color = BrandText, fontSize = 15.sp, fontFamily = PoppinsFontFamily)
+                                Text("Owner: ${sub.owner_name}", color = Color(0xFF64748B), fontSize = 12.sp, fontFamily = PoppinsFontFamily)
+                                Text("Mobile: ${sub.mobile_number}", color = Color(0xFF64748B), fontSize = 12.sp, fontFamily = PoppinsFontFamily)
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .background(statusBg, RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = status.uppercase(),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = badgeColor,
+                                    fontFamily = PoppinsFontFamily
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    selectedSubmissionForReview?.let { sub ->
+        val status = sub.status.lowercase()
+        AlertDialog(
+            onDismissRequest = { selectedSubmissionForReview = null },
+            title = {
+                Text(sub.business_name, fontWeight = FontWeight.Bold, fontFamily = PoppinsFontFamily)
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (errorMessage != null) {
+                        Text(errorMessage!!, color = BrandError, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = PoppinsFontFamily)
+                    }
+
+                    Text("Contact Details", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = BrandPrimary, fontFamily = PoppinsFontFamily)
+                    Text("Owner Name: ${sub.owner_name}", fontSize = 13.sp, fontFamily = PoppinsFontFamily)
+                    Text("Email: ${sub.email}", fontSize = 13.sp, fontFamily = PoppinsFontFamily)
+                    Text("Mobile: ${sub.mobile_number}", fontSize = 13.sp, fontFamily = PoppinsFontFamily)
+                    Text("WhatsApp: ${sub.whatsapp_number}", fontSize = 13.sp, fontFamily = PoppinsFontFamily)
+
+                    HorizontalDivider(color = BrandBorder)
+
+                    Text("Business Address", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = BrandPrimary, fontFamily = PoppinsFontFamily)
+                    Text("Address: ${sub.address_line_1}${if(sub.address_line_2.isNullOrEmpty()) "" else ", " + sub.address_line_2}", fontSize = 13.sp, fontFamily = PoppinsFontFamily)
+                    Text("City / District: ${sub.city} / ${sub.district}", fontSize = 13.sp, fontFamily = PoppinsFontFamily)
+                    Text("State / PIN: ${sub.state} - ${sub.pin_code}", fontSize = 13.sp, fontFamily = PoppinsFontFamily)
+                    Text("Country: ${sub.country}", fontSize = 13.sp, fontFamily = PoppinsFontFamily)
+
+                    HorizontalDivider(color = BrandBorder)
+
+                    Text("KYC Verification", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = BrandPrimary, fontFamily = PoppinsFontFamily)
+                    Text("ID Type: ${sub.government_id_type}", fontSize = 13.sp, fontFamily = PoppinsFontFamily)
+                    Text("ID Number: ${sub.government_id_number ?: "N/A"}", fontSize = 13.sp, fontFamily = PoppinsFontFamily)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (sub.government_id_url.isNotEmpty()) {
+                            Button(
+                                onClick = {
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(sub.government_id_url))
+                                    context.startActivity(intent)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = BrandSecondary),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Gov ID", fontSize = 11.sp, fontFamily = PoppinsFontFamily)
+                            }
+                        }
+                        if (!sub.pan_card_url.isNullOrEmpty()) {
+                            Button(
+                                onClick = {
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(sub.pan_card_url))
+                                    context.startActivity(intent)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = BrandSecondary),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("PAN Card", fontSize = 11.sp, fontFamily = PoppinsFontFamily)
+                            }
+                        }
+                        if (sub.profile_photo_url.isNotEmpty()) {
+                            Button(
+                                onClick = {
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(sub.profile_photo_url))
+                                    context.startActivity(intent)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = BrandSecondary),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Photo", fontSize = 11.sp, fontFamily = PoppinsFontFamily)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (status == "pending" || status == "rejected") {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Button(
+                            onClick = {
+                                isSaving = true
+                                errorMessage = null
+                                onUpdateKycStatus(sub.id, "verified", null) { result ->
+                                    isSaving = false
+                                    if (result.isSuccess) {
+                                        selectedSubmissionForReview = null
+                                    } else {
+                                        errorMessage = result.exceptionOrNull()?.message ?: "Operation failed."
+                                    }
+                                }
+                            },
+                            enabled = !isSaving,
+                            colors = ButtonDefaults.buttonColors(containerColor = BrandSuccess),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Approve", color = Color.White, fontFamily = PoppinsFontFamily)
+                        }
+
+                        Button(
+                            onClick = {
+                                isRequestReupload = false
+                                showRejectDialog = true
+                            },
+                            enabled = !isSaving,
+                            colors = ButtonDefaults.buttonColors(containerColor = BrandError),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Reject", color = Color.White, fontFamily = PoppinsFontFamily)
+                        }
+
+                        Button(
+                            onClick = {
+                                isRequestReupload = true
+                                showRejectDialog = true
+                            },
+                            enabled = !isSaving,
+                            colors = ButtonDefaults.buttonColors(containerColor = BrandWarning),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Re-upload", color = Color.White, fontFamily = PoppinsFontFamily)
+                        }
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { selectedSubmissionForReview = null }) {
+                    Text("Close", fontFamily = PoppinsFontFamily)
+                }
+            }
+        )
+    }
+
+    if (showRejectDialog) {
+        AlertDialog(
+            onDismissRequest = { showRejectDialog = false },
+            title = {
+                Text(if(isRequestReupload) "Request Document Re-upload" else "Reject KYC Submission", fontWeight = FontWeight.Bold, fontFamily = PoppinsFontFamily)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(if(isRequestReupload) "Specify which documents need to be re-uploaded:" else "Enter the reason for rejection:", fontFamily = PoppinsFontFamily)
+                    OutlinedTextField(
+                        value = rejectionReason,
+                        onValueChange = { rejectionReason = it },
+                        placeholder = { Text(if(isRequestReupload) "e.g., Please re-upload a clearer image of your Aadhaar card." else "e.g., Documents provided are blurry or expired.", fontFamily = PoppinsFontFamily) },
+                        modifier = Modifier.fillMaxWidth().height(100.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val finalReason = if (isRequestReupload) {
+                            "Request Re-upload: $rejectionReason"
+                        } else {
+                            rejectionReason
+                        }
+                        val finalStatus = "rejected"
+                        
+                        selectedSubmissionForReview?.let { sub ->
+                            isSaving = true
+                            onUpdateKycStatus(sub.id, finalStatus, finalReason) { result ->
+                                isSaving = false
+                                if (result.isSuccess) {
+                                    showRejectDialog = false
+                                    selectedSubmissionForReview = null
+                                    rejectionReason = ""
+                                } else {
+                                    errorMessage = result.exceptionOrNull()?.message ?: "Operation failed."
+                                }
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandError),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Confirm", color = Color.White, fontFamily = PoppinsFontFamily)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRejectDialog = false }) {
+                    Text("Cancel", fontFamily = PoppinsFontFamily)
+                }
+            }
+        )
+    }
+}
+

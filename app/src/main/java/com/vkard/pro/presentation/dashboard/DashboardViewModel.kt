@@ -9,6 +9,7 @@ import com.vkard.pro.data.local.SecureSessionManager
 import com.vkard.pro.data.remote.SupabaseClientProvider
 import com.vkard.pro.domain.model.DigitalCardWithSub
 import com.vkard.pro.domain.model.RevenueLedger
+import com.vkard.pro.domain.model.KycSubmission
 import com.vkard.pro.domain.repository.AuthRepository
 import com.vkard.pro.domain.repository.CardRepository
 import io.github.jan.supabase.postgrest.postgrest
@@ -36,7 +37,8 @@ sealed interface DashboardUiState {
         val agentCount: Int,
         val cardStats: CardStats,
         val cards: List<DigitalCardWithSub>,
-        val ledger: List<RevenueLedger>
+        val ledger: List<RevenueLedger>,
+        val kycSubmissions: List<KycSubmission>
     ) : DashboardUiState
     
     data class FranchiseData(
@@ -46,8 +48,10 @@ sealed interface DashboardUiState {
         val cardStats: CardStats,
         val cards: List<DigitalCardWithSub>,
         val agentNetwork: List<AgentUiModel>,
-        val ledger: List<RevenueLedger>
+        val ledger: List<RevenueLedger>,
+        val kycSubmissions: List<KycSubmission>
     ) : DashboardUiState
+
     
     data class AgentData(
         val name: String,
@@ -107,12 +111,15 @@ class DashboardViewModel(
                         val filteredCards = allCards // Super admin sees all cards
                         val cardStats = calculateCardStats(filteredCards)
                         
+                        val kycSubmissions = authRepository.getAllKycSubmissions().getOrDefault(emptyList())
+                        
                         uiState = DashboardUiState.SuperAdminData(
                             franchiseCount = franchises.size,
                             agentCount = agents.size,
                             cardStats = cardStats,
                             cards = filteredCards,
-                            ledger = ledger
+                            ledger = ledger,
+                            kycSubmissions = kycSubmissions
                         )
                     }
                     "franchise" -> {
@@ -153,7 +160,12 @@ class DashboardViewModel(
                         // Filter: Franchise sees their own cards + cards created by their child agents
                         val agentIds = agentNetwork.map { it.id }.toSet()
                         val filteredCards = allCards.filter { it.created_by == userId || agentIds.contains(it.created_by) }
-                        val cardStats = calculateCardStats(filteredCards)
+                        
+                        // Stats calculated ONLY for self-created cards
+                        val selfCreatedCards = allCards.filter { it.created_by == userId }
+                        val cardStats = calculateCardStats(selfCreatedCards)
+                        
+                        val kycSubmissions = authRepository.getFranchiseAgentsKycSubmissions(userId).getOrDefault(emptyList())
                         
                         uiState = DashboardUiState.FranchiseData(
                             name = name,
@@ -162,7 +174,8 @@ class DashboardViewModel(
                             cardStats = cardStats,
                             cards = filteredCards,
                             agentNetwork = agentNetwork,
-                            ledger = ledger
+                            ledger = ledger,
+                            kycSubmissions = kycSubmissions
                         )
                     }
                     else -> { // agent
@@ -302,6 +315,42 @@ class DashboardViewModel(
                     }
                 }
                 
+                onComplete(Result.failure(Exception(friendlyMessage)))
+            }
+        }
+    }
+
+    fun updateKycStatus(
+        submissionId: String,
+        status: String,
+        rejectionReason: String?,
+        onComplete: (Result<Unit>) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val adminId = sessionManager.getUserId() ?: throw Exception("Unauthorized")
+                authRepository.updateKycStatus(submissionId, status, rejectionReason, adminId)
+                    .onSuccess {
+                        loadDashboard()
+                        onComplete(Result.success(Unit))
+                    }
+                    .onFailure { throw it }
+            } catch (e: Exception) {
+                if (com.vkard.pro.BuildConfig.DEBUG) {
+                    android.util.Log.e("DashboardViewModel", "Failed to update KYC status", e)
+                }
+                val msg = e.message ?: ""
+                val friendlyMessage = when {
+                    msg.contains("Permission", ignoreCase = true) || msg.contains("policy", ignoreCase = true) -> {
+                        "Permission denied."
+                    }
+                    msg.contains("Connect", ignoreCase = true) || msg.contains("timeout", ignoreCase = true) || msg.contains("host", ignoreCase = true) -> {
+                        "Internet connection unavailable."
+                    }
+                    else -> {
+                        "Unable to save changes."
+                    }
+                }
                 onComplete(Result.failure(Exception(friendlyMessage)))
             }
         }

@@ -131,32 +131,23 @@ class MainActivity : ComponentActivity() {
                     
                     // KYC Block Screen
                     composable(Screen.KycBlock.route) {
-                        var kycStatus by remember { mutableStateOf("pending") }
-                        var rejectionReason by remember { mutableStateOf<String?>(null) }
+                        val userId = sessionManager.getUserId() ?: ""
+                        val role = sessionManager.getRole() ?: "agent"
+                        val kycViewModel = remember {
+                            com.vkard.pro.presentation.login.KycViewModel(authRepository, userId, role)
+                        }
                         
-                        LaunchedEffect(Unit) {
-                            val userId = sessionManager.getUserId() ?: ""
-                            val role = sessionManager.getRole() ?: ""
-                            if (role == "super_admin") {
+                        val submission = kycViewModel.submission
+                        LaunchedEffect(submission?.status) {
+                            if (submission?.status == "verified") {
                                 navController.navigate(Screen.Dashboard.route) {
                                     popUpTo(Screen.KycBlock.route) { inclusive = true }
                                 }
-                            } else {
-                                authRepository.getKycStatus(userId)
-                                    .onSuccess { status ->
-                                        kycStatus = status
-                                        if (status == "verified") {
-                                            navController.navigate(Screen.Dashboard.route) {
-                                                popUpTo(Screen.KycBlock.route) { inclusive = true }
-                                            }
-                                        }
-                                    }
                             }
                         }
                         
                         KycBlockScreen(
-                            status = kycStatus,
-                            rejectionReason = rejectionReason,
+                            viewModel = kycViewModel,
                             onLogout = {
                                 coroutineScope.launch {
                                     authRepository.logout()
